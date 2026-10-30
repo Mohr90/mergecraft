@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Mergecraft",
+  "version": "0.2.0",
+  "identifier": "eu.n4group.mergecraft",
+  "build": {
+    "beforeDevCommand": "npm run dev:web",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build:web",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Mergecraft",
+        "width": 1620,
+        "height": 1000,
+        "minWidth": 1180,
+        "minHeight": 680,
+        "resizable": true
+      }
+    ],
+    "withGlobalTauri": true,
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Development",
+    "shortDescription": "Git-Client mit 3-Wege-Merge-Editor",
+    "longDescription": "Mergecraft ist ein Git-Client für Linux mit Branch-Suche, Commit-Historie, Diff-Ansicht und einem 3-Wege-Merge-Editor im Stil von WebStorm: lokal | Ergebnis | eingehend, Konflikt für Konflikt auflösbar."
+  }
+}

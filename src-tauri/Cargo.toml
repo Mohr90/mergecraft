@@ -1,0 +1,15 @@
+[package]
+name = "mergecraft"
+version = "0.2.0"
+description = "Mergecraft - Git-Client mit 3-Wege-Merge-Editor"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+gtk = "0.18"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+mergecraft-core = { path = "../core" }

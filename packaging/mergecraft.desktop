@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Mergecraft
+GenericName=Git-Client
+Comment=Git-Client mit 3-Wege-Merge-Editor (lokal | Ergebnis | eingehend)
+Exec=mergecraft %u
+Icon=mergecraft
+Terminal=false
+Categories=Development;RevisionControl;
+Keywords=git;merge;konflikt;diff;branch;
+MimeType=inode/directory;
+StartupNotify=true
+StartupWMClass=mergecraft

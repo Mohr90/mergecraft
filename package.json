@@ -1,0 +1,21 @@
+{
+  "name": "mergecraft",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev:web": "vite",
+    "build:web": "vite build",
+    "typecheck": "tsc --noEmit",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.1.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.3"
+  }
+}

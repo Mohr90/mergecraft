@@ -1,0 +1,6 @@
+target/
+dist/
+node_modules/
+src-tauri/icons/android/
+src-tauri/icons/ios/
+*.log
