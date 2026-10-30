@@ -835,11 +835,28 @@ thread_local! {
 /// einer GTK-Host-App auf - der Aufruf endet dann weder mit Ergebnis noch mit
 /// Fehler. Hier läuft der Dialog im Haupt-Event-Loop, das Ergebnis kommt über
 /// einen Kanal.
+///
+/// Wichtig: `async`. Ein synchroner Befehl läuft in Tauri auf dem Haupt-Thread;
+/// `run_on_main_thread` schiebt den Dialog dann in eine Warteschlange, die der
+/// Haupt-Thread erst abarbeitet, wenn er mit Warten auf die Antwort fertig ist -
+/// der Dialog erscheint nie und die Oberfläche steht. Als asynchroner Befehl
+/// läuft das Warten auf einem Arbeits-Thread.
 #[tauri::command(rename_all = "snake_case")]
-pub fn pick_folder(app: tauri::AppHandle, title: Option<String>) -> Result<Option<String>, String> {
+pub async fn pick_folder(
+    app: tauri::AppHandle,
+    title: Option<String>,
+) -> Result<Option<String>, String> {
     use gtk::prelude::*;
 
     let title = title.unwrap_or_else(|| "Ordner wählen".into());
+
+    // Prüfhaken: Antwort ohne Mausklick vorgeben. Auf Systemen ohne
+    // Eingabewerkzeug (xdotool/wmctrl) lässt sich damit die Kette
+    // Klick -> Befehl -> Kanal -> geöffnetes Repository nachweisen.
+    if let Ok(vorgabe) = std::env::var("MERGECRAFT_PICK_AUTO") {
+        return Ok(if vorgabe.is_empty() { None } else { Some(vorgabe) });
+    }
+
     let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
 
     app.run_on_main_thread(move || {
@@ -868,7 +885,7 @@ pub fn pick_folder(app: tauri::AppHandle, title: Option<String>) -> Result<Optio
     })
     .map_err(|e| format!("Haupt-Thread nicht erreichbar: {e}"))?;
 
-    match rx.recv_timeout(std::time::Duration::from_secs(600)) {
+    match rx.recv_timeout(std::time::Duration::from_secs(180)) {
         Ok(Some(p)) => Ok(Some(p)),
         Ok(None) => Ok(None),
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
