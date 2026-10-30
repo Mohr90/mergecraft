@@ -14,7 +14,7 @@ import {
 } from "./api";
 import { openBranchMenu } from "./branchmenu";
 import { DiffView } from "./diff";
-import { baseName, MergeEditor } from "./merge";
+import { baseName, dirName, MergeEditor } from "./merge";
 import { renderBranches, renderChanges, renderConsole, renderHistory, type PanelCtx } from "./panels";
 import { askText, confirmDialog, esc, icon, toast } from "./ui";
 
@@ -47,6 +47,8 @@ class App implements PanelCtx {
   private noFF = true;
   private busy = false;
   private lastStatus = "";
+  private welcomeError: { message: string; path: string } | null = null;
+  private keysBound = false;
 
   private root: HTMLElement;
   private titlebar!: HTMLElement;
@@ -80,10 +82,10 @@ class App implements PanelCtx {
         if (resolved && !this.standalone) void this.afterResolve();
       },
       onError: (message) => toast(message, "err"),
-      onClose: () => this.closeOverlay(),
+      onClose: () => void this.requestCloseOverlay(),
       onSwitch: (path) => void this.openMerge(path),
     });
-    this.diffView = new DiffView(() => this.closeOverlay());
+    this.diffView = new DiffView(() => void this.requestCloseOverlay());
   }
 
   // ----------------------------------------------------------- Lebenszyklus
@@ -102,12 +104,31 @@ class App implements PanelCtx {
     } catch {
       /* kein Standalone-Merge */
     }
+    // Repository vom Aufruf übernehmen, sonst das zuletzt geöffnete
+    let snap: RepoSnapshot | null = null;
     try {
-      this.snap = await api.snapshot();
-      await this.refresh(true);
+      snap = await api.snapshot();
     } catch {
-      this.snap = null;
+      snap = null;
+    }
+    if (!snap) {
+      const recent = await api.recentRepos().catch(() => [] as string[]);
+      for (const r of recent.slice(0, 5)) {
+        try {
+          snap = await api.openRepo(r);
+          toast(`Zuletzt geöffnet: ${snap.name}`, "info");
+          break;
+        } catch {
+          /* Eintrag verschwunden oder kein Repository mehr */
+        }
+      }
+    }
+    this.snap = snap;
+    if (this.snap) {
+      await this.refresh(true);
+    } else {
       this.buildShell();
+      this.render();
     }
   }
 
@@ -117,11 +138,22 @@ class App implements PanelCtx {
 
   private async refresh(deep = false) {
     if (!this.hasRepo) return;
+    this.busy = true;
+    this.root.querySelector(".shell")?.classList.add("busy");
     try {
-      this.snap = await api.snapshot();
-      this.branchesList = await api.branches();
-      this.statusData = await api.status();
-      if (deep || !this.historyList.length) this.historyList = await api.history(300, false);
+      // Die vier Abfragen sind unabhängig - gemeinsam statt nacheinander
+      const wantHistory = deep || !this.historyList.length;
+      const [snap, branches, status, hist] = await Promise.all([
+        api.snapshot(),
+        // Einzelne Ausfälle dürfen die ganze Ansicht nicht kosten
+        api.branches().catch(() => [] as BranchInfo[]),
+        api.status().catch(() => EMPTY_STATUS),
+        wantHistory ? api.history(300, false).catch(() => [] as CommitInfo[]) : Promise.resolve(null),
+      ]);
+      this.snap = snap;
+      this.branchesList = branches;
+      this.statusData = status;
+      if (hist) this.historyList = hist;
       this.mergeEditor.siblings = this.statusData.conflicts.map((c) => ({
         path: c.path,
         code: c.conflict_code ?? "",
@@ -131,6 +163,8 @@ class App implements PanelCtx {
       }
     } catch (e) {
       toast(`Repository nicht lesbar: ${String(e)}`, "err");
+    } finally {
+      this.busy = false;
     }
     this.render();
   }
@@ -160,11 +194,154 @@ class App implements PanelCtx {
     this.mergeHost = this.root.querySelector(".merge-host") as HTMLElement;
     this.diffHost = this.root.querySelector(".diff-host") as HTMLElement;
     this.statusbar = this.root.querySelector(".statusbar") as HTMLElement;
+
+    // Ereignisbehandlung genau einmal binden: die Panels werden bei jedem
+    // Zeichnen ersetzt, die Rahmen-Elemente bleiben - sonst sammeln sich
+    // Listener und jede Aktion liefe mehrfach.
+    this.titlebar.addEventListener("click", (e) => {
+      const act = (e.target as HTMLElement).closest("[data-act]")?.getAttribute("data-act");
+      if (!act) return;
+      switch (act) {
+        case "branches":
+          if (this.branchTrigger) this.openBranchMenu(this.branchTrigger);
+          break;
+        case "open":
+          void this.pickRepo();
+          break;
+        case "fetch":
+          void this.run("Fetch", () => api.fetchRemote(null));
+          break;
+        case "pull":
+          void this.run("Pull", () => api.pull());
+          break;
+        case "push":
+          void this.run("Push", () => api.push(false));
+          break;
+        case "refresh":
+          void this.refresh(true);
+          break;
+      }
+    });
+
+    this.rail.addEventListener("click", (e) => {
+      const tab = (e.target as HTMLElement).closest("[data-tab]")?.getAttribute("data-tab") as Tab;
+      if (!tab) return;
+      void this.switchTab(tab);
+    });
+
+    this.statusbar.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).dataset.act === "reveal" && this.snap) {
+        void api.openPath(this.snap.root);
+      }
+    });
+
+    // Willkommensseite: Pfadeingabe, Ordnerauswahl, Repository anlegen
+    this.panelHost.addEventListener("click", (e) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-act="pick"]')) return void this.pickRepo();
+      if (target.closest('[data-act="init"]')) {
+        const path = this.welcomeError?.path;
+        if (path) void this.initRepo(path);
+        return;
+      }
+      const item = target.closest("[data-recent]") as HTMLElement | null;
+      if (item?.dataset.recent) void this.openRepo(item.dataset.recent, true);
+    });
+    this.panelHost.addEventListener("keydown", (e) => {
+      const input = e.target as HTMLInputElement;
+      if (input.classList.contains("repo-path") && e.key === "Enter" && input.value.trim()) {
+        void this.openRepo(input.value.trim(), true);
+      }
+    });
+
+    if (!this.keysBound) {
+      this.keysBound = true;
+      window.addEventListener("keydown", (e) => this.onGlobalKey(e));
+    }
+  }
+
+  /** Globale Tastenkürzel. */
+  private onGlobalKey(e: KeyboardEvent) {
+    const mod = e.ctrlKey || e.metaKey;
+    const target = e.target as HTMLElement | null;
+    const typing =
+      !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
+    if (mod && e.key === "Enter" && typing && target?.classList.contains("commit-msg")) {
+      e.preventDefault();
+      const box = target.closest(".commit-box") as HTMLElement | null;
+      const all = (box?.querySelector(".opt-all") as HTMLInputElement | null)?.checked ?? false;
+      const amend = (box?.querySelector(".opt-amend") as HTMLInputElement | null)?.checked ?? false;
+      const sign = (box?.querySelector(".opt-sign") as HTMLInputElement | null)?.checked ?? false;
+      this.commit((target as HTMLTextAreaElement).value, amend, sign, all);
+      return;
+    }
+    if (e.key === "F5" || (mod && e.key.toLowerCase() === "r")) {
+      e.preventDefault();
+      if (this.hasRepo) void this.refresh(true);
+      return;
+    }
+    if (mod && ["1", "2", "3", "4"].includes(e.key)) {
+      e.preventDefault();
+      const tabs: Tab[] = ["changes", "branches", "history", "console"];
+      void this.switchTab(tabs[Number(e.key) - 1]);
+      return;
+    }
+    if (mod && (e.key.toLowerCase() === "p" || e.key.toLowerCase() === "b")) {
+      e.preventDefault();
+      if (this.hasRepo && this.branchTrigger) this.openBranchMenu(this.branchTrigger);
+      return;
+    }
+    if (e.key === "Escape") {
+      // Dialoge behandeln Escape selbst - sonst käme eine zweite Rückfrage
+      if (document.querySelector(".modal")) return;
+      const pop = document.querySelector(".popover");
+      if (pop) {
+        pop.remove();
+        return;
+      }
+      if (this.overlay !== "none") void this.requestCloseOverlay();
+    }
+  }
+
+  /** Tabwechsel mit Schutz vor ungesicherten Merge-Änderungen. */
+  private async switchTab(tab: Tab) {
+    if (this.tab === tab && this.overlay === "none") return;
+    if (this.overlay === "merge" && this.mergeEditor.hasUnsavedChanges()) {
+      const ok = await confirmDialog(
+        "Ungespeicherte Änderungen verwerfen?",
+        "Der Merge-Editor enthält Änderungen, die noch nicht geschrieben wurden.",
+        "Verwerfen",
+      );
+      if (!ok) return;
+      this.mergeEditor.discardChanges();
+    }
+    this.tab = tab;
+    this.overlay = "none";
+    this.render();
+  }
+
+  /** Überlagerung schließen, mit Rückfrage bei ungesicherten Änderungen. */
+  async requestCloseOverlay() {
+    if (this.overlay === "merge" && this.mergeEditor.hasUnsavedChanges()) {
+      const ok = await confirmDialog(
+        "Merge-Editor schließen?",
+        "Die Änderungen wurden noch nicht gespeichert.",
+        "Schließen ohne Speichern",
+      );
+      if (!ok) return;
+      this.mergeEditor.discardChanges();
+    }
+    this.closeOverlay();
   }
 
   private render() {
     if (!this.root.querySelector(".shell")) this.buildShell();
+    this.root.querySelector(".shell")?.classList.toggle("busy", this.busy);
+    if (this.standalone && !this.hasRepo) return this.renderStandaloneChrome();
     if (!this.hasRepo) {
+      this.panelHost.classList.remove("hidden");
+      this.mergeHost.classList.add("hidden");
+      this.diffHost.classList.add("hidden");
       this.renderWelcome();
       return;
     }
@@ -175,6 +352,36 @@ class App implements PanelCtx {
     this.mergeHost.classList.toggle("hidden", this.overlay !== "merge");
     this.diffHost.classList.toggle("hidden", this.overlay !== "diff");
     if (this.overlay === "none") this.renderPanel();
+    this.syncWindowTitle();
+  }
+
+  /** Eigene Kopfzeile, wenn Mergecraft als externes Merge-Tool läuft. */
+  private renderStandaloneChrome() {
+    this.titlebar.innerHTML = `
+      <span class="brand">${icon("logo", 18)} Mergecraft</span>
+      <span class="repo-name" title="${esc(this.mergePath)}">${esc(baseName(this.mergePath))}</span>
+      <span class="chip merging">Merge-Tool-Modus</span>
+      <span class="right row-actions-gap">
+        <span class="muted small">lokal | Ergebnis | eingehend</span>
+      </span>`;
+    this.rail.innerHTML = "";
+    this.statusbar.innerHTML = `
+      <span class="path">${esc(dirName(this.mergePath))}</span>
+      <span class="right dim">ohne Repository – Ergebnis wird in die übergebene Datei geschrieben</span>`;
+    this.panelHost.classList.add("hidden");
+    this.mergeHost.classList.toggle("hidden", this.overlay !== "merge");
+    this.diffHost.classList.add("hidden");
+    this.syncWindowTitle();
+  }
+
+  /** Fenstertitel der Arbeitsumgebung mitpflegen. */
+  private syncWindowTitle() {
+    const title = this.hasRepo && this.snap
+      ? `${this.snap.name} – ${this.snap.head_branch ?? "HEAD"}${this.statusData.conflicts.length ? ` (${this.statusData.conflicts.length} Konflikte)` : ""} – Mergecraft`
+      : this.standalone
+        ? `${baseName(this.mergePath)} – Mergecraft (Merge-Tool)`
+        : "Mergecraft";
+    void api.setTitle(title);
   }
 
   private renderTitlebar() {
@@ -212,30 +419,6 @@ class App implements PanelCtx {
         <button class="icon-btn" data-act="refresh" title="Aktualisieren">${icon("refresh", 15)}</button>
       </span>`;
     this.branchTrigger = this.titlebar.querySelector(".branch-trigger") as HTMLButtonElement;
-    this.titlebar.addEventListener("click", (e) => {
-      const act = (e.target as HTMLElement).closest("[data-act]")?.getAttribute("data-act");
-      if (!act) return;
-      switch (act) {
-        case "branches":
-          this.openBranchMenu(this.branchTrigger);
-          break;
-        case "open":
-          void this.pickRepo();
-          break;
-        case "fetch":
-          void this.run("Fetch", () => api.fetchRemote(null));
-          break;
-        case "pull":
-          void this.run("Pull", () => api.pull());
-          break;
-        case "push":
-          void this.run("Push", () => api.push(false));
-          break;
-        case "refresh":
-          void this.refresh(true);
-          break;
-      }
-    });
   }
 
   private renderRail() {
@@ -261,13 +444,6 @@ class App implements PanelCtx {
         )
         .join("")}
       <span class="rail-spacer"></span>`;
-    this.rail.addEventListener("click", (e) => {
-      const tab = (e.target as HTMLElement).closest("[data-tab]")?.getAttribute("data-tab") as Tab;
-      if (!tab) return;
-      this.tab = tab;
-      this.overlay = "none";
-      this.render();
-    });
   }
 
   private renderStatusbar() {
@@ -283,9 +459,6 @@ class App implements PanelCtx {
       <span class="${st.conflicts.length ? "warn" : ""}">${st.conflicts.length} Konflikte</span>
       <span class="dim">${esc(s.head.slice(0, 8))}</span>
       <span class="dim">${esc(s.head_branch ?? "")} · ${esc(st.head_subject.slice(0, 40))}</span>`;
-    this.statusbar.addEventListener("click", (e) => {
-      if ((e.target as HTMLElement).dataset.act === "reveal") void api.openPath(s.root);
-    });
   }
 
   private renderPanel() {
@@ -307,21 +480,46 @@ class App implements PanelCtx {
   }
 
   private renderWelcome() {
-    this.titlebar.innerHTML = `<span class="brand">${icon("logo", 18)} Mergecraft</span>`;
+    this.titlebar.innerHTML = `
+      <span class="brand">${icon("logo", 18)} Mergecraft</span>
+      <span class="right row-actions-gap"><span class="muted small">kein Repository geöffnet</span></span>`;
     this.rail.innerHTML = "";
     this.statusbar.innerHTML = "";
     this.panelHost.classList.remove("hidden");
+    const err = this.welcomeError;
     this.panelHost.innerHTML = `
       <div class="welcome">
         <div class="logo">${icon("logo", 30)}<h1>Mergecraft</h1></div>
         <p class="lead">Git-Client mit 3-Wege-Merge-Editor: <b>lokal</b> | <b>Ergebnis</b> | <b>eingehend</b> –
         Konflikte Bereich für Bereich auflösen, wie im WebStorm-Merge-Dialog.</p>
+        ${
+          err
+            ? `<div class="banner error" style="max-width:620px;margin:0 auto 18px">
+                 ${icon("warning", 15)} <b>Kein Git-Repository gefunden.</b>
+                 <span class="mono small" style="display:block;margin-top:4px;opacity:.8">${esc(
+                   err.path,
+                 )}</span>
+                 <span class="small" style="display:block;margin-top:4px;opacity:.8">${esc(
+                   err.message,
+                 )}</span>
+                 <span class="right row-actions-gap">
+                   <button class="btn" data-act="init">${icon("plus", 14)} Repository hier anlegen</button>
+                 </span>
+               </div>`
+            : ""
+        }
         <div class="open-row">
-          <input type="text" class="repo-path" placeholder="/pfad/zum/repo – auch mit ~ am Anfang" />
+          <input type="text" class="repo-path" placeholder="/pfad/zum/repo – auch mit ~ am Anfang"
+            value="${esc(err?.path ?? "")}" />
           <button class="btn primary big" data-act="pick">${icon("folder", 16)} Ordner wählen …</button>
         </div>
-        <div class="recent"><h3>Zuletzt geöffnet</h3><div class="recent-list"></div></div>
+        <div class="recent"><h3>Zuletzt geöffnet</h3><div class="recent-list">
+          <p class="muted small">lädt …</p></div></div>
         <div class="hint">
+          <h3>Bedienung</h3>
+          <p class="small muted">Branch-Chip oben links: suchen, wechseln, mergen, anlegen.
+          <b>Strg+1…4</b> wechselt die Bereiche, <b>Strg+R</b> aktualisiert,
+          <b>Alt+↑/↓</b> springt im Merge-Editor von Konflikt zu Konflikt.</p>
           <h3>Direkt starten</h3>
           <pre>mergecraft /pfad/zum/repo</pre>
           <h3>Als externes Merge-Tool (ohne gitconfig-Änderung)</h3>
@@ -329,25 +527,20 @@ class App implements PanelCtx {
         </div>
       </div>`;
     const input = this.panelHost.querySelector(".repo-path") as HTMLInputElement;
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && input.value.trim()) void this.openRepo(input.value.trim());
-    });
+    if (err) input.select();
     const list = this.panelHost.querySelector(".recent-list") as HTMLElement;
     void api.recentRepos().then((repos) => {
       list.innerHTML = repos.length
         ? `<ul>${repos
             .map(
               (r) =>
-                `<li><button data-path="${esc(r)}">${icon("folder", 13)} ${esc(r)}</button></li>`,
+                `<li><button data-recent="${esc(r)}" title="${esc(r)}">${icon("folder", 13)} ${esc(
+                  r,
+                )}</button></li>`,
             )
             .join("")}</ul>`
         : `<p class="muted small">noch keine Repositories geöffnet</p>`;
-      list.addEventListener("click", (e) => {
-        const p = (e.target as HTMLElement).closest("[data-path]")?.getAttribute("data-path");
-        if (p) void this.openRepo(p);
-      });
     });
-    this.panelHost.querySelector('[data-act="pick"]')?.addEventListener("click", () => void this.pickRepo());
   }
 
   // ------------------------------------------------------------- Aktionen
@@ -387,7 +580,7 @@ class App implements PanelCtx {
     if (typed) await this.openRepo(typed);
   }
 
-  private async openRepo(path: string) {
+  async openRepo(path: string, fromWelcome = false) {
     try {
       this.snap = await api.openRepo(path);
       this.historyList = [];
@@ -395,13 +588,39 @@ class App implements PanelCtx {
       this.selectedFiles = [];
       this.tab = "changes";
       this.overlay = "none";
+      this.welcomeError = null;
       await this.refresh(true);
       if (this.statusData.conflicts.length) {
         toast(`${this.statusData.conflicts.length} Konflikt(e) gefunden`, "err");
       }
     } catch (e) {
-      toast(`Kein Git-Repository: ${String(e)}`, "err");
+      const message = String(e).replace(/^Error: /, "");
+      if (fromWelcome) {
+        this.welcomeError = { message, path };
+        this.snap = null;
+        this.buildShellOnce();
+        this.render();
+      } else {
+        toast(`Kein Git-Repository: ${message}`, "err");
+      }
     }
+  }
+
+  /** Repository anlegen, wenn im Ordner noch keines ist. */
+  private async initRepo(path: string) {
+    try {
+      this.snap = await api.initRepo(path);
+      this.welcomeError = null;
+      this.tab = "changes";
+      await this.refresh(true);
+      toast(`Repository angelegt: ${this.snap.name}`, "ok");
+    } catch (e) {
+      toast(`Anlegen fehlgeschlagen: ${String(e)}`, "err");
+    }
+  }
+
+  private buildShellOnce() {
+    if (!this.root.querySelector(".shell")) this.buildShell();
   }
 
   private async afterResolve() {
@@ -419,6 +638,19 @@ class App implements PanelCtx {
   }
 
   async openMerge(path: string) {
+    if (
+      this.overlay === "merge" &&
+      path !== this.mergePath &&
+      this.mergeEditor.hasUnsavedChanges()
+    ) {
+      const ok = await confirmDialog(
+        "Nächsten Konflikt bearbeiten?",
+        "Der aktuelle enthält ungespeicherte Änderungen.",
+        "Ohne Speichern weiter",
+      );
+      if (!ok) return;
+      this.mergeEditor.discardChanges();
+    }
     try {
       const data = await api.conflictData(path);
       this.mergePath = path;

@@ -39,6 +39,30 @@ Rust (Tauri v2) im Hintergrund, Oberfläche in TypeScript, Git über die echte `
   geänderten Bereich eine Entscheidung.
 * Binärdateien werden erkannt; dort nimmt man eine Seite komplett an.
 
+## Erststart
+
+Ohne Argument zeigt Mergecraft die Willkommensseite: Pfad eintippen (oder Ordner
+wählen), Liste der zuletzt geöffneten Repositories, und – falls der Ordner noch
+kein Repository ist – eine Schaltfläche **„Repository hier anlegen“** (`git init
+-b main`). Wurde schon einmal ein Repository geöffnet, startet die App direkt
+damit.
+
+## Tastenkürzel
+
+| Kürzel | Wirkung |
+| --- | --- |
+| `Strg+R`, `F5` | Aktualisieren |
+| `Strg+1` … `Strg+4` | Änderungen / Branches / Historie / Konsole |
+| `Strg+P` | Branch-Suche öffnen |
+| `Alt+↑` / `Alt+↓` | vorheriger / nächster Konflikt im Merge-Editor |
+| `Alt+←` / `Alt+→` / `Alt+B` | lokale / eingehende / beide Fassung übernehmen |
+| `Alt+Enter` | speichern und als gelöst markieren |
+| `Strg+Enter` | Commit aus dem Nachrichtenfeld |
+| `Esc` | Popover, Rückfrage oder Editor schließen |
+
+Ungespeicherte Änderungen im Merge-Editor gehen nicht verloren: beim Wechsel des
+Bereichs, des Konflikts oder beim Schließen fragt Mergecraft nach.
+
 ## Branches suchen, wechseln, anlegen, mergen
 
 * Branch-Chip in der Kopfzeile öffnet ein Popover mit **Suchfeld** (unscharfe
@@ -102,6 +126,21 @@ mergecraft --diag ~/develop/n4kit src/main.rs  # einzelne Konfliktdatei
 MERGECRAFT_DIAG_JSON=1 mergecraft --diag .     # zusätzlich JSON
 MERGECRAFT_DIAG_WRITE=1 mergecraft --diag --merge ours base theirs merged main feat
 ```
+
+## Selbsttest (Oberfläche ohne Bildschirmfoto prüfen)
+
+Auf Wayland lässt sich das Fenster nicht abfotografieren (der Compositor zeichnet).
+Mergecraft kann deshalb ein Skript in die Oberfläche injizieren und das Ergebnis
+zurückmelden:
+
+```bash
+MERGECRAFT_SELFTEST=packaging/selftest-merge.js \
+MERGECRAFT_SELFTEST_OUT=/tmp/ergebnis.txt mergecraft /pfad/zum/repo
+```
+
+Das Skript löst echte Klicks aus und beendet sich über den Befehl
+`selftest_report`; geprüft wird anschließend am Ergebnis auf der Platte
+(`git status`, Dateiinhalt). Zwei Beispiele liegen in `packaging/`.
 
 ## Aufbau
 

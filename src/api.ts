@@ -269,6 +269,8 @@ export const api = {
     call<CommandResult>("commit", { message, amend, sign, all }),
 
   gitRaw: (args: string[]) => call<CommandResult>("git_raw", { args }),
+  setTitle: (title: string) =>
+    inTauri ? call<void>("set_title", { title }) : Promise.resolve(),
   pickFolder: (title?: string) => call<string | null>("pick_folder", { title: title ?? null }),
   openPath: (path: string) => call<void>("open_path", { path }),
 };

@@ -64,6 +64,7 @@ export class MergeEditor {
   private rawMode = false;
   private rawEl: HTMLTextAreaElement | null = null;
   private jumpOpen = false;
+  private touched = false;
 
   constructor(host: MergeHost) {
     this.host = host;
@@ -73,6 +74,7 @@ export class MergeEditor {
 
   load(data: ConflictData) {
     this.data = data;
+    this.touched = false;
     this.res.clear();
     this.nodes.clear();
     this.current = -1;
@@ -81,6 +83,16 @@ export class MergeEditor {
     this.oursLines = splitLines(data.ours.text);
     this.theirsLines = splitLines(data.theirs.text);
     this.baseLines = splitLines(data.base.text);
+  }
+
+  /** Wurde seit dem Laden etwas entschieden oder getippt? */
+  hasUnsavedChanges(): boolean {
+    return this.touched;
+  }
+
+  /** Änderungen verwerfen (nach Rückfrage). */
+  discardChanges() {
+    this.touched = false;
   }
 
   private needsDecision(r: Region): boolean {
@@ -480,6 +492,7 @@ export class MergeEditor {
   }
 
   private decide(i: number, choice: Choice, text?: string[]) {
+    this.touched = true;
     this.res.set(i, { choice, text });
     this.updateRegion(i);
     this.updateHeader();
@@ -571,6 +584,7 @@ export class MergeEditor {
       area.addEventListener("input", () => {
         const idx = Number(area.dataset.region);
         const lines = area.value.split("\n");
+        this.touched = true;
         this.res.set(idx, { choice: "custom", text: lines });
         area.rows = Math.max(1, lines.length);
         const region = this.nodes.get(idx);
@@ -599,6 +613,9 @@ export class MergeEditor {
       const area = el("textarea", "raw-edit");
       area.spellcheck = false;
       area.value = this.resultText();
+      area.addEventListener("input", () => {
+        this.touched = true;
+      });
       this.rawEl = area;
       grid.innerHTML = "";
       grid.classList.add("raw");
@@ -624,8 +641,10 @@ export class MergeEditor {
       const text = this.rawEl.value;
       const hasMarkers = /^(<{7}|={7}|>{7})/m.test(text);
       const r = await this.host.save(text, markResolved && !hasMarkers);
-      if (r.ok) this.host.onSaved(r.message, markResolved && !hasMarkers);
-      else this.host.onError(r.message);
+      if (r.ok) {
+        this.touched = false;
+        this.host.onSaved(r.message, markResolved && !hasMarkers);
+      } else this.host.onError(r.message);
       return;
     }
     const open = this.openRegions();
@@ -636,8 +655,10 @@ export class MergeEditor {
       return;
     }
     const r = await this.host.save(this.resultText(), markResolved);
-    if (r.ok) this.host.onSaved(r.message, markResolved);
-    else this.host.onError(r.message);
+    if (r.ok) {
+      this.touched = false;
+      this.host.onSaved(r.message, markResolved);
+    } else this.host.onError(r.message);
   }
 }
 

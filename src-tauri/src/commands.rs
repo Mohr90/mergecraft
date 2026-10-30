@@ -148,20 +148,23 @@ fn side_text(g: &Git, rev: &str, path: &str, label: &str) -> SideText {
 
 // ---------------------------------------------------------------- Repository
 
+/// Repository als geöffnet merken (zuletzt benutzte nach vorn, höchstens 12).
+fn remember(state: &State<AppState>, root: &Path) {
+    let mut r = state.recent.lock().unwrap();
+    let s = root.display().to_string();
+    r.retain(|p| p != &s);
+    r.insert(0, s);
+    r.truncate(12);
+    save_recent(&r);
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub fn open_repo(state: State<AppState>, path: String) -> Result<RepoSnapshot, String> {
     let root = Git::discover(&expand(&path))?;
     let g = Git::new(root.clone());
     let snap = g.snapshot()?;
     *state.root.lock().unwrap() = Some(root.clone());
-    {
-        let mut r = state.recent.lock().unwrap();
-        let s = root.display().to_string();
-        r.retain(|p| p != &s);
-        r.insert(0, s);
-        r.truncate(12);
-        save_recent(&r);
-    }
+    remember(&state, &root);
     Ok(snap)
 }
 
@@ -182,7 +185,8 @@ pub fn init_repo(state: State<AppState>, path: String) -> Result<RepoSnapshot, S
     Git::new(p.clone()).run(["init", "-b", "main"])?;
     let root = Git::discover(&p)?;
     let g = Git::new(root.clone());
-    *state.root.lock().unwrap() = Some(root);
+    *state.root.lock().unwrap() = Some(root.clone());
+    remember(&state, &root);
     g.snapshot()
 }
 
@@ -872,6 +876,12 @@ pub fn pick_folder(app: tauri::AppHandle, title: Option<String>) -> Result<Optio
         }
         Err(_) => Err("Ordnerauswahl konnte nicht angezeigt werden".into()),
     }
+}
+
+/// Fenstertitel setzen (Repository, Branch, Konfliktzahl).
+#[tauri::command(rename_all = "snake_case")]
+pub fn set_title(window: tauri::Window, title: String) -> Result<(), String> {
+    window.set_title(&title).map_err(|e| e.to_string())
 }
 
 /// Selbsttest: nimmt das Ergebnis eines injizierten Skripts entgegen.

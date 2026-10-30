@@ -123,6 +123,7 @@ fn main() {
             // System
             commands::pick_folder,
             commands::open_path,
+            commands::set_title,
             commands::selftest_report,
         ])
         .run(tauri::generate_context!());

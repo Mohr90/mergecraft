@@ -359,6 +359,10 @@ impl Git {
         }
         let out = self.raw(args);
         if out.code != 0 {
+            // Ein frisches Repository hat noch keinen Commit - das ist kein Fehler.
+            if self.raw(["rev-parse", "--verify", "HEAD"]).code != 0 {
+                return Ok(Vec::new());
+            }
             return Err(out.stderr.trim().to_string());
         }
         let mut v = Vec::new();

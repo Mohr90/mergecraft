@@ -177,10 +177,24 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
       <label class="switch"><input type="checkbox" class="opt-sign"> signieren (-S)</label>
       <span class="right row-actions-gap">
         <span class="muted small">${st.staged.length} Datei(en) bereit</span>
-        <button class="btn primary" data-top-act="commit">${icon("check", 14)} Commit</button>
+        <button class="btn primary" data-top-act="commit" title="Strg+Enter">${icon("check", 14)} Commit
+          <span class="kbd">Strg+↵</span></button>
       </span>
     </div>`;
   wrap.appendChild(box);
+
+  // Doppelklick öffnet die Datei: Konflikt -> Merge-Editor, sonst Diff
+  wrap.addEventListener("dblclick", (e) => {
+    const row = (e.target as HTMLElement).closest(".row") as HTMLElement | null;
+    const path = row?.dataset.path;
+    if (!path) return;
+    const entry = st.conflicts
+      .concat(st.staged, st.changed, st.untracked)
+      .find((x) => x.path === path);
+    if (!entry) return;
+    if (entry.state === "conflicted") ctx.openMerge(path);
+    else if (entry.state !== "untracked") ctx.openWorkingDiff(path);
+  });
 
   wrap.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
