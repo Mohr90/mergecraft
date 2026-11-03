@@ -1,3 +1,4 @@
+import {detectLanguage,setLanguage,getLanguage,h,m,t,localizeText} from "../src/i18n";
 import { branchSync } from "../src/sync";
 import { askText, confirmDialog, toast } from "../src/ui";
 import { chooseRollback } from "../src/rollback";
@@ -17,6 +18,46 @@ async function test(name: string, fn: () => void | Promise<void>) {
 }
 function assert(ok: unknown, message: string) { if (!ok) throw new Error(message); }
 function click(selector: string) { (fixture.querySelector(selector) as HTMLElement).click(); }
+await test('language selection prefers saved choices, detects supported system languages and survives unavailable storage',()=>{
+ assert(detectLanguage('en',['de-DE'])==='en','saved preference ignored');
+ assert(detectLanguage(null,['fr-FR','de-AT'])==='de','supported system language ignored');
+ assert(detectLanguage('invalid',['fr-FR'])==='en','unsupported fallback');
+ const original=Storage.prototype.setItem;
+ try { Storage.prototype.setItem=()=>{throw new Error('blocked');};setLanguage('en');assert(getLanguage()==='en'&&document.documentElement.lang==='en','session language did not apply'); }
+ finally {Storage.prototype.setItem=original;setLanguage('de');}
+});
+await test('localization keeps paths, source code, HTML values and message interpolation opaque',()=>{
+ try {
+  setLanguage('en');
+  const userValue='Änderungen <b>lokal</b>';
+  assert(h`<b>${userValue}</b>`===`<b>${userValue}</b>`,'dynamic user text was translated');
+  assert(h`<span>${2} von ${5} Tags</span>`==='<span>2 of 5 tags</span>','interpolation failed');
+  assert(h`<button title="Aktionen für ${userValue}" data-name="Änderungen">Speichern</button>`===`<button title="Actions for ${userValue}" data-name="Änderungen">Save</button>`,'attributes changed outside the UI message');
+  assert(h`<button>Speichern &amp; als gelöst markieren</button>`==='<button>Save &amp; mark resolved</button>','entity encoding changed');
+  assert(m`Branch „${'feature/Änderungen'}“ ${'remote '}löschen?`==='Delete remote branch “feature/Änderungen”?','message slots cannot be reordered');
+  assert(localizeText('Datei nicht lesbar: src/Änderungen.ts')==='Could not read file: src/Änderungen.ts','displayed message did not translate');
+  assert(localizeText('!Commit: Keine Änderungen vorhanden – es gibt nichts Neues zu committen.')==='!Commit: No changes – there is nothing new to commit.','status label did not translate');
+  assert(localizeText("fatal: branch 'Änderungen' not found")==="fatal: branch 'Änderungen' not found",'raw Git output changed');
+  setLanguage('de');
+  assert(localizeText('Could not read file: src/Änderungen.ts')==='Datei nicht lesbar: src/Änderungen.ts','displayed message did not translate back');
+ } finally {setLanguage('de');}
+});
+await test('language changes preserve unsaved merge decisions, raw text and undo history',async()=>{
+ const data=await mockInvoke('conflict_data',{path:'test.rs'});
+ const editor=new MergeEditor({save:async()=>({ok:true,message:'saved'}),onSaved(){},onError(){},onClose(){}});
+ editor.load(data);editor.mount(fixture);
+ click('[data-act="take-ours"]');const chosen=editor.resultText();
+ click('[data-act="raw"]');
+ const area=fixture.querySelector<HTMLTextAreaElement>('.raw-edit')!;area.value='Änderungen remain source code\n';area.dispatchEvent(new Event('input',{bubbles:true}));
+ try {
+  setLanguage('en');editor.relocalize();
+  assert(fixture.querySelector<HTMLTextAreaElement>('.raw-edit')!.value==='Änderungen remain source code\n','raw text lost');
+  assert(editor.hasUnsavedChanges(),'dirty state cleared');
+  assert(fixture.querySelector('[data-act="save"]')!.textContent==='Save','editor did not translate');
+  click('[data-act="undo"]');assert(editor.resultText()===chosen,'language change altered undo history');
+  click('[data-act="redo"]');assert(fixture.querySelector<HTMLTextAreaElement>('.raw-edit')!.value==='Änderungen remain source code\n','redo changed after translation');
+ } finally {setLanguage('de');}
+});
 await test('sync status separates unpublished commits from missing or unknown tracking',async()=>{
  const branch=(await mockInvoke('branches'))[0];branch.upstream='origin/main';branch.tracking_known=true;
  for(const [ahead,behind,tone,words] of [[0,0,'ok','Synchron'],[2,0,'pending','2 ungepushte'],[0,1,'incoming','Remote-Commit fehlt'],[2,1,'pending','Remote-Commit fehlt']] as const){const value=branchSync({...branch,ahead,behind});assert(value.tone===tone&&value.label.includes(words),'wrong sync state');}

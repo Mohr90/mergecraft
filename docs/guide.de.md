@@ -1,6 +1,12 @@
 # Mergecraft bedienen
 
-Mergecraft ist ein Git-Client für Linux. Die Oberfläche ist auf Deutsch, Git-Zugangsdaten und Remote-Konfiguration kommen aus deiner vorhandenen Git-Einrichtung.
+Mergecraft ist ein Git-Client für Linux. Die Oberfläche ist auf Deutsch und Englisch verfügbar, Git-Zugangsdaten und Remote-Konfiguration kommen aus deiner vorhandenen Git-Einrichtung.
+
+## Sprache und Darstellung
+
+Unten in der Seitenleiste stehen beim Hell-/Dunkel-Schalter zwei beschriftete Sprachbuttons: **🇩🇪 Deutsch** und **🇬🇧 English**. Die aktive Sprache ist markiert und bleibt lokal gespeichert. Ohne eigene Auswahl folgt die App einer unterstützten Systemsprache; andernfalls startet sie auf Englisch.
+
+Der Wechsel lädt kein Repository neu und verändert weder Dateien noch den Git-Index. Commit-Entwürfe, Filter, Merge-Entscheidungen, freie Texte und Undo/Redo bleiben erhalten. Git-Ausgaben, Dateinamen, Branch-Namen, Commit-Nachrichten und Quelltext werden nicht übersetzt. Die Sprache lässt sich auch auf der Willkommensseite und im externen Merge-Tool ändern.
 
 ## Änderungen und Commit
 

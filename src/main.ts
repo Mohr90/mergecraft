@@ -1,3 +1,4 @@
+import { t, getLanguage, setLanguage, localizeText, h, m, type Language } from "./i18n";
 // Mergecraft – App-Rahmen: Kopfzeile, Aktivitätsleiste, Panels, Merge-Editor,
 // Diff-Ansicht, Aktionen.
 
@@ -21,7 +22,7 @@ import { baseName, dirName, MergeEditor } from "./merge";
 import { renderBranches, renderChanges, renderConsole, renderHistory, type PanelCtx, type BranchViewState } from "./panels";
 import { chooseRollback } from "./rollback";
 import { renderTags, type TagViewState } from "./tags";
-import { askText, confirmDialog, modal, esc, icon, toast } from "./ui";
+import { askText, confirmDialog, modal, esc, icon, toast, relocalizeToasts } from "./ui";
 
 type Tab = "changes" | "branches" | "history" | "console" | "tags";
 type Overlay = "none" | "merge" | "diff" | "compare";
@@ -72,7 +73,7 @@ class App implements PanelCtx {
   private mergeHost!: HTMLElement;
   private diffHost!: HTMLElement;
   private compareHost!: HTMLElement;
-  private comparison: { a: string; b: string; label: string; files: FileChange[] } | null = null;
+  private comparison: { a: string; b: string; label: string; files: FileChange[]; tag: boolean } | null = null;
   private commitDraft = { message: "", amend: false };
   private statusbar!: HTMLElement;
   private branchTrigger!: HTMLButtonElement;
@@ -98,7 +99,7 @@ class App implements PanelCtx {
           const r = this.standalone
             ? await api.standaloneSave(text)
             : await api.saveConflict(this.mergePath, text, markResolved);
-          return { ok: r.ok, message: r.stdout || r.stderr || "gespeichert" };
+          return { ok: r.ok, message: r.stdout || r.stderr || t("gespeichert") };
         } catch (e) {
           return { ok: false, message: String(e) };
         }
@@ -110,9 +111,9 @@ class App implements PanelCtx {
       },
       onError: (message) => toast(message, "err"),
       takeSide: async side => {
-        if (!(await confirmDialog("Vollständige Konfliktseite übernehmen?", "Die aktuelle Arbeitsdatei wird durch diese Seite ersetzt oder gelöscht.", "Übernehmen"))) return;
-        if (this.standalone) await this.run("Dateiseite übernehmen", () => api.standaloneSide(side));
-        else { await this.run("Dateiseite übernehmen", () => api.resolveWithSide(this.mergePath, side)); await this.afterResolve(); }
+        if (!(await confirmDialog(t("Vollständige Konfliktseite übernehmen?"), t("Die aktuelle Arbeitsdatei wird durch diese Seite ersetzt oder gelöscht."), t("Übernehmen")))) return;
+        if (this.standalone) await this.run(t("Dateiseite übernehmen"), () => api.standaloneSide(side));
+        else { await this.run(t("Dateiseite übernehmen"), () => api.resolveWithSide(this.mergePath, side)); await this.afterResolve(); }
       },
       canAbort:()=>!this.standalone&&!!this.snap?.merging,
       onAbort:()=>this.mergeAbort(),
@@ -135,18 +136,18 @@ class App implements PanelCtx {
         if (this.closePending) return;
         this.closePending = true;
         try { if (await this.leaveMerge()) await getCurrentWindow().destroy(); }
-        catch(e) { toast(`Fenster konnte nicht geschlossen werden: ${String(e)}`, "err"); }
+        catch(e) { toast(m`Fenster konnte nicht geschlossen werden: ${String(e)}`, "err"); }
         finally { this.closePending = false; }
-      })).catch(e=>this.log(`Fensterschutz: ${String(e)}`));
+      })).catch(e=>this.log(m`Fensterschutz: ${String(e)}`));
     }
-    this.root.innerHTML = `<div class="empty" style="padding-top:20vh">Mergecraft startet …</div>`;
+    this.root.innerHTML = h`<div class="empty" style="padding-top:20vh">Mergecraft startet …</div>`;
     try {
       const standalone = await api.standaloneData();
       if (standalone) {
         this.standalone = true;
         this.buildShell();
         this.showMerge(standalone);
-        toast(`Standalone-Merge: ${standalone.path}`, "info");
+        toast(m`Standalone-Merge: ${standalone.path}`, "info");
         return;
       }
     } catch {
@@ -164,7 +165,7 @@ class App implements PanelCtx {
       for (const r of recent.slice(0, 5)) {
         try {
           snap = await api.openRepo(r);
-          toast(`Zuletzt geöffnet: ${snap.name}`, "info");
+          toast(m`Zuletzt geöffnet: ${snap.name}`, "info");
           break;
         } catch {
           /* Eintrag verschwunden oder kein Repository mehr */
@@ -218,13 +219,13 @@ class App implements PanelCtx {
         const hash = this.selected;
         const request = this.commitRequest;
         const files = await api.commitFiles(hash).catch(e => {
-          if (this.selected === hash) toast(`Commit-Dateien nicht lesbar: ${String(e)}`, "err");
+          if (this.selected === hash) toast(m`Commit-Dateien nicht lesbar: ${String(e)}`, "err");
           return [] as FileChange[];
         });
         if (request === this.commitRequest && this.selected === hash) this.selectedFiles = files;
       }
     } catch (e) {
-      toast(`Repository nicht lesbar: ${String(e)}`, "err");
+      toast(m`Repository nicht lesbar: ${String(e)}`, "err");
     } finally {
       this.busy = false;
     }
@@ -234,7 +235,7 @@ class App implements PanelCtx {
   // ------------------------------------------------------------- Aufbau
 
   private buildShell() {
-    this.root.innerHTML = `
+    this.root.innerHTML = h`
       <div class="shell">
         <div class="titlebar"></div>
         <div class="body">
@@ -291,6 +292,11 @@ class App implements PanelCtx {
       const tab = (e.target as HTMLElement).closest("[data-tab]")?.getAttribute("data-tab") as Tab;
       if (!tab) return;
       void this.switchTab(tab);
+    });
+
+    this.rail.addEventListener("click", e => {
+      const language = (e.target as HTMLElement).closest<HTMLElement>("[data-language-choice]")?.dataset.languageChoice;
+      if (language === "de" || language === "en") this.changeLanguage(language);
     });
 
     this.rail.addEventListener("click", e => {
@@ -378,13 +384,13 @@ class App implements PanelCtx {
 
   /** Tabwechsel mit Schutz vor ungesicherten Merge-Änderungen. */
   private async switchTab(tab: Tab) {
-    if(this.overlay==="merge"&&this.mergeEditor.isSaving()){toast("Speichern läuft noch. Bitte kurz warten.","info");return ;}
+    if(this.overlay==="merge"&&this.mergeEditor.isSaving()){toast(t("Speichern läuft noch. Bitte kurz warten."),"info");return ;}
     if (this.tab === tab && this.overlay === "none") return;
     if (this.overlay === "merge" && this.mergeEditor.hasUnsavedChanges()) {
       const ok = await confirmDialog(
-        "Ungespeicherte Änderungen verwerfen?",
-        "Der Merge-Editor enthält Änderungen, die noch nicht geschrieben wurden.",
-        "Verwerfen",
+        t("Ungespeicherte Änderungen verwerfen?"),
+        t("Der Merge-Editor enthält Änderungen, die noch nicht geschrieben wurden."),
+        t("Verwerfen"),
       );
       if (!ok) return;
       this.mergeEditor.discardChanges();
@@ -398,12 +404,12 @@ class App implements PanelCtx {
 
   /** Überlagerung schließen, mit Rückfrage bei ungesicherten Änderungen. */
   async requestCloseOverlay() {
-    if(this.overlay==="merge"&&this.mergeEditor.isSaving()){toast("Speichern läuft noch. Bitte kurz warten.","info");return ;}
+    if(this.overlay==="merge"&&this.mergeEditor.isSaving()){toast(t("Speichern läuft noch. Bitte kurz warten."),"info");return ;}
     if (this.overlay === "merge" && this.mergeEditor.hasUnsavedChanges()) {
       const ok = await confirmDialog(
-        "Merge-Editor schließen?",
-        "Die Änderungen wurden noch nicht gespeichert.",
-        "Schließen ohne Speichern",
+        t("Merge-Editor schließen?"),
+        t("Die Änderungen wurden noch nicht gespeichert."),
+        t("Schließen ohne Speichern"),
       );
       if (!ok) return;
       this.mergeEditor.discardChanges();
@@ -435,15 +441,15 @@ class App implements PanelCtx {
 
   /** Eigene Kopfzeile, wenn Mergecraft als externes Merge-Tool läuft. */
   private renderStandaloneChrome() {
-    this.titlebar.innerHTML = `
+    this.titlebar.innerHTML = h`
       <span class="brand">${icon("logo", 18)} Mergecraft</span>
       <span class="repo-name" title="${esc(this.mergePath)}">${esc(baseName(this.mergePath))}</span>
       <span class="chip merging">Merge-Tool-Modus</span>
       <span class="right row-actions-gap">
         <span class="muted small">lokal | Ergebnis | eingehend</span>
       </span>`;
-    this.rail.innerHTML = "";
-    this.statusbar.innerHTML = `
+    this.rail.innerHTML = `<span class="rail-spacer"></span>${this.preferenceControls()}`;
+    this.statusbar.innerHTML = h`
       <span class="path">${esc(dirName(this.mergePath))}</span>
       <span class="right dim">ohne Repository – Ergebnis wird in die übergebene Datei geschrieben</span>`;
     this.panelHost.classList.add("hidden");
@@ -455,9 +461,9 @@ class App implements PanelCtx {
   /** Fenstertitel der Arbeitsumgebung mitpflegen. */
   private syncWindowTitle() {
     const title = this.hasRepo && this.snap
-      ? `${this.snap.name} – ${this.snap.head_branch ?? "HEAD"}${this.statusData.conflicts.length ? ` (${this.statusData.conflicts.length} Konflikte)` : ""} – Mergecraft`
+      ? `${this.snap.name} – ${this.snap.head_branch ?? "HEAD"}${this.statusData.conflicts.length ? m` (${this.statusData.conflicts.length} Konflikte)` : ""} – Mergecraft`
       : this.standalone
-        ? `${baseName(this.mergePath)} – Mergecraft (Merge-Tool)`
+        ? m`${baseName(this.mergePath)} – Mergecraft (Merge-Tool)`
         : "Mergecraft";
     void api.setTitle(title);
   }
@@ -467,15 +473,15 @@ class App implements PanelCtx {
     const current = this.branchesList.find((b) => b.is_current);
     const ab = current
       ? [
-          current.ahead ? `<span class="up" title="${current.ahead} Commits voraus">↑${current.ahead}</span>` : "",
-          current.behind ? `<span class="down" title="${current.behind} Commits zurück">↓${current.behind}</span>` : "",
+          current.ahead ? h`<span class="up" title="${current.ahead} Commits voraus">↑${current.ahead}</span>` : "",
+          current.behind ? h`<span class="down" title="${current.behind} Commits zurück">↓${current.behind}</span>` : "",
         ]
           .filter(Boolean)
           .join("")
       : "";
     const sync=current ? branchSync(current) : null;
     const conflicts = this.statusData.conflicts.length;
-    this.titlebar.innerHTML = `
+    this.titlebar.innerHTML = h`
       <span class="brand">${icon("logo", 18)} Mergecraft</span>
       <div class="workspace-toolbar"><span class="repo-name" title="${esc(s.root)}">${esc(s.name)}</span>
       <span class="sep"></span>
@@ -486,10 +492,10 @@ class App implements PanelCtx {
         ${icon("chevron", 13)}
       </button>
       ${sync ? `<span class="sync-indicator sync-${sync.tone}" title="${esc(sync.detail)}" data-sync-state="${sync.tone}">${icon(sync.tone==="ok"?"check":sync.tone==="pending"?"push":"info",14)}<span>${esc(sync.label)}</span></span>` : ""}
-      ${s.merging ? `<span class="chip merging">${icon("merge", 12)} Merge noch nicht committet</span>` : ""}
-      ${s.rebasing ? `<span class="chip merging">Rebase läuft</span>` : ""}
-      ${s.cherry_picking ? `<span class="chip merging">Cherry-pick läuft</span>` : ""}
-      ${conflicts ? `<span class="chip conflict">${conflicts} Konflikt${conflicts === 1 ? "" : "e"}</span>` : ""}
+      ${s.merging ? h`<span class="chip merging">${icon("merge", 12)} Merge noch nicht committet</span>` : ""}
+      ${s.rebasing ? h`<span class="chip merging">Rebase läuft</span>` : ""}
+      ${s.cherry_picking ? h`<span class="chip merging">Cherry-pick läuft</span>` : ""}
+      ${conflicts ? h`<span class="chip conflict">${conflicts} ${conflicts === 1 ? t("Konflikt") : t("Konflikte")}</span>` : ""}
       <span class="right row-actions-gap">
         <button class="btn ghost" data-act="open" title="Anderes Repository öffnen">${icon("folder", 14)} Öffnen</button>
         <span class="sep"></span>
@@ -499,6 +505,41 @@ class App implements PanelCtx {
         <button class="icon-btn" data-act="refresh" aria-label="Aktualisieren" title="Aktualisieren">${icon("refresh", 15)}</button>
       </span></div>`;
     this.branchTrigger = this.titlebar.querySelector(".branch-trigger") as HTMLButtonElement;
+  }
+
+  private preferenceControls(): string {
+    const deFlag = new URL("./assets/flags/de.svg", import.meta.url).href;
+    const enFlag = new URL("./assets/flags/en.svg", import.meta.url).href;
+    return h`<div class="sidebar-footer"><div class="theme-switch" role="group" aria-label="Farbschema">
+      <button type="button" data-theme-choice="light" aria-pressed="${document.documentElement.dataset.theme === 'light'}">${icon('sun',14)} Hell</button>
+      <button type="button" data-theme-choice="dark" aria-pressed="${document.documentElement.dataset.theme === 'dark'}">${icon('moon',14)} Dunkel</button>
+    </div><div class="language-switch" role="group" aria-label="Sprache">
+      <button type="button" data-language-choice="de" lang="de" aria-label="Deutsch" title="Deutsch" aria-pressed="${getLanguage()==='de'}"><img src="${deFlag}" alt="" width="18" height="12"><span class="language-name">Deutsch</span><span class="language-code" aria-hidden="true">DE</span></button>
+      <button type="button" data-language-choice="en" lang="en" aria-label="English" title="English" aria-pressed="${getLanguage()==='en'}"><img src="${enFlag}" alt="" width="18" height="12"><span class="language-name">English</span><span class="language-code" aria-hidden="true">EN</span></button>
+    </div></div>`;
+  }
+
+  private changeLanguage(language: Language): void {
+    if (language === getLanguage()) { setLanguage(language); return; }
+    if (this.mergeEditor.isSaving()) { toast(t("Speichern läuft noch. Bitte kurz warten."), "info"); return; }
+    this.captureCommitDraft();
+    const controls = [...this.panelHost.querySelectorAll<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>('input:not([type="checkbox"]),textarea,select')].map(control=>({value:control.value,start:control instanceof HTMLSelectElement ? null : control.selectionStart,end:control instanceof HTMLSelectElement ? null : control.selectionEnd}));
+    const scroll = this.panelHost.scrollTop;
+    document.querySelector('.popover')?.remove();
+    setLanguage(language);
+    this.lastStatus=localizeText(this.lastStatus);
+    this.render();
+    if (this.overlay === 'merge') this.mergeEditor.relocalize();
+    if (this.overlay === 'diff') this.diffView.relocalize();
+    if (this.overlay === 'compare') this.renderComparison();
+    this.panelHost.querySelectorAll<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>('input:not([type="checkbox"]),textarea,select').forEach((control,index)=>{
+      const previous=controls[index];if(!previous)return;
+      control.value=previous.value;
+      if (!(control instanceof HTMLSelectElement) && previous.start!==null && previous.end!==null) control.setSelectionRange(previous.start,previous.end);
+    });
+    this.panelHost.scrollTop=scroll;
+    relocalizeToasts();
+    this.rail.querySelector<HTMLButtonElement>(`[data-language-choice="${language}"]`)?.focus({preventScroll:true});
   }
 
   private setTheme(theme: "light" | "dark") {
@@ -511,15 +552,15 @@ class App implements PanelCtx {
       {
         tab: "changes",
         icon: "changes",
-        title: "Änderungen",
+        title: t("Änderungen"),
         count: this.statusData.conflicts.length,
       },
       { tab: "branches", icon: "branch", title: "Branches" },
       { tab: "tags", icon: "tag", title: "Tags" },
-      { tab: "history", icon: "history", title: "Historie" },
-      { tab: "console", icon: "console", title: "Konsole" },
+      { tab: "history", icon: "history", title: t("Historie") },
+      { tab: "console", icon: "console", title: t("Konsole") },
     ];
-    this.rail.innerHTML = `
+    this.rail.innerHTML = h`
       <div class="sidebar-caption">Repository</div>
       ${items
         .map(
@@ -531,16 +572,13 @@ class App implements PanelCtx {
         )
         .join("")}
       <span class="rail-spacer"></span>
-      <div class="sidebar-footer"><div class="theme-switch" role="group" aria-label="Farbschema">
-        <button type="button" data-theme-choice="light" aria-pressed="${document.documentElement.dataset.theme === "light"}">${icon("sun", 14)} Hell</button>
-        <button type="button" data-theme-choice="dark" aria-pressed="${document.documentElement.dataset.theme === "dark"}">${icon("moon", 14)} Dunkel</button>
-      </div></div>`;
+      ${this.preferenceControls()}`;
   }
 
   private renderStatusbar() {
     const s = this.snap!;
     const st = this.statusData;
-    this.statusbar.innerHTML = `
+    this.statusbar.innerHTML = h`
       <button class="link path" data-act="reveal" title="${esc(s.root)}">${esc(s.root)}</button>
       ${this.lastStatus ? `<span class="status-message ${this.lastStatus.startsWith("!") ? "err" : ""}" title="${esc(this.lastStatus.replace(/^!/, ""))}">${esc(this.lastStatus.replace(/^!/, ""))}</span>` : ""}
       <span class="right"></span>
@@ -597,29 +635,29 @@ class App implements PanelCtx {
   }
 
   private async leaveMerge(): Promise<boolean> {
-    if(this.overlay==="merge"&&this.mergeEditor.isSaving()){toast("Speichern läuft noch. Bitte kurz warten.","info");return false;}
+    if(this.overlay==="merge"&&this.mergeEditor.isSaving()){toast(t("Speichern läuft noch. Bitte kurz warten."),"info");return false;}
     if (this.overlay !== "merge" || !this.mergeEditor.hasUnsavedChanges()) return true;
-    const ok = await confirmDialog("Ungespeicherte Merge-Änderungen verwerfen?", "Speichere die aktuelle Fassung, um sie zu behalten.", "Verwerfen");
+    const ok = await confirmDialog(t("Ungespeicherte Merge-Änderungen verwerfen?"), t("Speichere die aktuelle Fassung, um sie zu behalten."), t("Verwerfen"));
     if (ok) this.mergeEditor.discardChanges();
     return ok;
   }
 
   private renderWelcome() {
-    this.titlebar.innerHTML = `
+    this.titlebar.innerHTML = h`
       <span class="brand">${icon("logo", 18)} Mergecraft</span>
       <span class="right row-actions-gap"><span class="muted small">kein Repository geöffnet</span></span>`;
-    this.rail.innerHTML = "";
+    this.rail.innerHTML = `<span class="rail-spacer"></span>${this.preferenceControls()}`;
     this.statusbar.innerHTML = "";
     this.panelHost.classList.remove("hidden");
     const err = this.welcomeError;
-    this.panelHost.innerHTML = `
+    this.panelHost.innerHTML = h`
       <div class="welcome">
         <div class="logo">${icon("logo", 30)}<h1>Mergecraft</h1></div>
         <p class="lead">Git-Client mit 3-Wege-Merge-Editor: <b>lokal</b> | <b>Ergebnis</b> | <b>eingehend</b> –
         Konflikte Bereich für Bereich auflösen, wie im WebStorm-Merge-Dialog.</p>
         ${
           err
-            ? `<div class="banner error" style="max-width:620px;margin:0 auto 18px">
+            ? h`<div class="banner error" style="max-width:620px;margin:0 auto 18px">
                  ${icon("warning", 15)} <b>Kein Git-Repository gefunden.</b>
                  <span class="mono small" style="display:block;margin-top:4px;opacity:.8">${esc(
                    err.path,
@@ -664,7 +702,7 @@ class App implements PanelCtx {
                 )}</button></li>`,
             )
             .join("")}</ul>`
-        : `<p class="muted small">noch keine Repositories geöffnet</p>`;
+        : h`<p class="muted small">noch keine Repositories geöffnet</p>`;
     });
   }
 
@@ -683,7 +721,7 @@ class App implements PanelCtx {
       const r = await fn();
       const out = (r.stdout + (r.stderr ? "\n" + r.stderr : "")).trim();
       this.log(`$ ${label}\n${out || `(exit ${r.code})`}`);
-      this.lastStatus = r.ok ? `${label}: ok` : `!${label}: ${/nothing to commit|no changes added to commit|nothing added to commit/i.test(out) ? "Keine Änderungen zum Commit vorgemerkt. Hake zuerst die gewünschten Dateien an." : (r.stderr.trim() || r.stdout.trim() || `exit ${r.code}`).slice(0, 600)}`;
+      this.lastStatus = r.ok ? `${label}: ok` : `!${label}: ${/nothing to commit|no changes added to commit|nothing added to commit/i.test(out) ? t("Keine Änderungen zum Commit vorgemerkt. Hake zuerst die gewünschten Dateien an.") : (r.stderr.trim() || r.stdout.trim() || `exit ${r.code}`).slice(0, 600)}`;
       if (r.ok && label === "Commit") {
         this.commitDraft = { message: "", amend: false };
         const message = this.panelHost.querySelector(".commit-msg") as HTMLTextAreaElement | null;
@@ -691,7 +729,7 @@ class App implements PanelCtx {
         const mode=this.panelHost.querySelector<HTMLSelectElement>(".commit-mode");
         if(mode) { mode.value="new"; mode.dispatchEvent(new Event("change")); }
       }
-      if (!quiet || !r.ok) toast(r.ok ? label === "Push" ? "Push abgeschlossen – Commits veröffentlicht" : label === "Commit" ? "Commit lokal erstellt – noch nicht veröffentlicht" : `${label} abgeschlossen` : this.lastStatus.slice(1), r.ok ? "ok" : "err");
+      if (!quiet || !r.ok) toast(r.ok ? label === "Push" ? t("Push abgeschlossen – Commits veröffentlicht") : label === "Commit" ? t("Commit lokal erstellt – noch nicht veröffentlicht") : m`${label} abgeschlossen` : this.lastStatus.slice(1), r.ok ? "ok" : "err");
     } catch (e) {
       this.lastStatus = `!${label}: ${String(e)}`;
       toast(this.lastStatus.slice(1), "err");
@@ -704,14 +742,14 @@ class App implements PanelCtx {
 
   private async pickRepo() {
     try {
-      const path = await api.pickFolder("Repository wählen");
+      const path = await api.pickFolder(t("Repository wählen"));
       if (path) return void (await this.openRepo(path));
       return;
     } catch (e) {
-      toast("Systemdialog nicht verfügbar – Pfad bitte eintippen", "err");
-      this.log(`Ordnerauswahl fehlgeschlagen: ${String(e)}`);
+      toast(t("Systemdialog nicht verfügbar – Pfad bitte eintippen"), "err");
+      this.log(m`Ordnerauswahl fehlgeschlagen: ${String(e)}`);
     }
-    const typed = await askText("Repository öffnen", "Pfad zum Repository oder Unterordner", this.snap?.root ?? "");
+    const typed = await askText(t("Repository öffnen"), t("Pfad zum Repository oder Unterordner"), this.snap?.root ?? "");
     if (typed) await this.openRepo(typed);
   }
 
@@ -732,7 +770,7 @@ class App implements PanelCtx {
       this.welcomeError = null;
       await this.refresh(true);
       if (this.statusData.conflicts.length) {
-        toast(`${this.statusData.conflicts.length} Konflikt(e) gefunden`, "err");
+        toast(m`${this.statusData.conflicts.length} Konflikt(e) gefunden`, "err");
       }
     } catch (e) {
       const message = String(e).replace(/^Error: /, "");
@@ -742,7 +780,7 @@ class App implements PanelCtx {
         this.buildShellOnce();
         this.render();
       } else {
-        toast(`Kein Git-Repository: ${message}`, "err");
+        toast(m`Kein Git-Repository: ${message}`, "err");
       }
     }
   }
@@ -754,9 +792,9 @@ class App implements PanelCtx {
       this.welcomeError = null;
       this.tab = "changes";
       await this.refresh(true);
-      toast(`Repository angelegt: ${this.snap.name}`, "ok");
+      toast(m`Repository angelegt: ${this.snap.name}`, "ok");
     } catch (e) {
-      toast(`Anlegen fehlgeschlagen: ${String(e)}`, "err");
+      toast(m`Anlegen fehlgeschlagen: ${String(e)}`, "err");
     }
   }
 
@@ -772,25 +810,25 @@ class App implements PanelCtx {
     if (this.statusData.conflicts.some((c) => c.path === resolvedPath)) return;
     const next = this.statusData.conflicts[0];
     if (next) {
-      toast(`Nächster Konflikt: ${baseName(next.path)}`, "info");
+      toast(m`Nächster Konflikt: ${baseName(next.path)}`, "info");
       await this.openMerge(next.path);
     } else {
       this.closeOverlay();
-      toast(this.snap?.merging ? "Alle Konflikte gelöst – Merge kann abgeschlossen werden" : "Alle Konflikte gelöst – Ergebnis kann geprüft und committet werden", "ok");
+      toast(this.snap?.merging ? t("Alle Konflikte gelöst – Merge kann abgeschlossen werden") : t("Alle Konflikte gelöst – Ergebnis kann geprüft und committet werden"), "ok");
     }
   }
 
   async openMerge(path: string) {
-    if(this.mergeEditor.isSaving()){toast("Speichern läuft noch. Bitte kurz warten.","info");return;}
+    if(this.mergeEditor.isSaving()){toast(t("Speichern läuft noch. Bitte kurz warten."),"info");return;}
     const request=++this.mergeRequest,root=this.snap?.root;
     if (
       this.overlay === "merge" &&
       this.mergeEditor.hasUnsavedChanges()
     ) {
       const ok = await confirmDialog(
-        "Nächsten Konflikt bearbeiten?",
-        "Der aktuelle enthält ungespeicherte Änderungen.",
-        "Ohne Speichern weiter",
+        t("Nächsten Konflikt bearbeiten?"),
+        t("Der aktuelle enthält ungespeicherte Änderungen."),
+        t("Ohne Speichern weiter"),
       );
       if (!ok||request!==this.mergeRequest||root!==this.snap?.root) return;
       this.mergeEditor.discardChanges();
@@ -801,7 +839,7 @@ class App implements PanelCtx {
       this.mergePath = path;
       this.showMerge(data);
     } catch (e) {
-      toast(`Datei nicht lesbar: ${String(e)}`, "err");
+      toast(m`Datei nicht lesbar: ${String(e)}`, "err");
     }
   }
 
@@ -820,7 +858,7 @@ class App implements PanelCtx {
   toggleFavorite(name: string) {
     const favorites=this.favoriteBranches();
     if(favorites.has(name)) favorites.delete(name); else favorites.add(name);
-    try { localStorage.setItem("mergecraft-favorites:"+this.snap?.root,JSON.stringify([...favorites])); } catch { toast("Favoriten konnten nicht gespeichert werden", "err"); }
+    try { localStorage.setItem("mergecraft-favorites:"+this.snap?.root,JSON.stringify([...favorites])); } catch { toast(t("Favoriten konnten nicht gespeichert werden"), "err"); }
     this.renderPanel();
   }
 
@@ -855,24 +893,24 @@ class App implements PanelCtx {
       row.classList.toggle("preview-selected",selected);
       row.querySelector(".fpath")?.setAttribute("aria-pressed",String(selected));
     });
-    if (!selection) { host.innerHTML = '<div class="empty"><b>Datei auswählen</b><span>Hier siehst du direkt, was sich geändert hat.</span></div>'; return; }
+    if (!selection) { host.innerHTML = h`<div class="empty"><b>Datei auswählen</b><span>Hier siehst du direkt, was sich geändert hat.</span></div>`; return; }
     const entries = selection.area === "staged" ? this.statusData.staged : selection.area === "work" ? this.statusData.changed : this.statusData.untracked;
     if (!entries.some(e=>e.path===selection.path)) {
       const next = this.statusData.staged.some(e=>e.path===selection.path) ? "staged" : this.statusData.changed.some(e=>e.path===selection.path) ? "work" : this.statusData.untracked.some(e=>e.path===selection.path) ? "untracked" : null;
       this.previewSelection=next ? {path:selection.path,area:next} : null; void this.mountPreview(); return;
     }
-    host.innerHTML = '<div class="empty" role="status">Vergleich wird geladen …</div>';
+    host.innerHTML = h`<div class="empty" role="status">Vergleich wird geladen …</div>`;
     try {
       const diff = await api.workingDiff(selection.path,selection.area);
       if(request!==this.previewRequest || !host.isConnected) return;
       host.innerHTML = '';
       const toolbar = document.createElement("div"); toolbar.className="preview-toolbar";
-      const label=document.createElement("span"); label.className="preview-caption"; label.textContent="Änderungsvorschau"; toolbar.appendChild(label);
-      const expand = document.createElement("button"); expand.className="btn"; expand.textContent="Vergrößern";
+      const label=document.createElement("span"); label.className="preview-caption"; label.textContent=t("Änderungsvorschau"); toolbar.appendChild(label);
+      const expand = document.createElement("button"); expand.className="btn"; expand.textContent=t("Vergrößern");
       expand.onclick=()=>void this.openWorkingDiff(selection.path,selection.area); toolbar.appendChild(expand); host.appendChild(toolbar);
       const body=document.createElement("div"); body.className="preview-body"; host.appendChild(body);
-      const view=new DiffView(()=>{ this.previewSelection=null; void this.mountPreview(); }); view.set(diff,"unified"); view.mount(body);
-    } catch(e) { if(request===this.previewRequest && host.isConnected) { host.textContent=`Vergleich nicht verfügbar: ${String(e)}`; } }
+      const view=new DiffView(()=>{ this.previewSelection=null; void this.mountPreview(); }); view.set(diff,"unified",true); view.mount(body);
+    } catch(e) { if(request===this.previewRequest && host.isConnected) { host.textContent=m`Vergleich nicht verfügbar: ${String(e)}`; } }
   }
 
   async openWorkingDiff(path: string, area: "staged"|"work"|"untracked" = "work") {
@@ -881,11 +919,11 @@ class App implements PanelCtx {
     try {
     document.querySelector(".popover")?.remove();
     const diff = await api.workingDiff(path, area);
-    this.diffView.set(diff);
+    this.diffView.set(diff,"split",true);
     this.diffView.mount(this.diffHost);
     this.overlay = "diff";
     this.render();
-    } catch (e) { toast(`Diff nicht lesbar: ${String(e)}`, "err"); }
+    } catch (e) { toast(m`Diff nicht lesbar: ${String(e)}`, "err"); }
   }
 
   async openCommitDiff(hash: string, path: string) {
@@ -898,7 +936,7 @@ class App implements PanelCtx {
     this.diffView.mount(this.diffHost);
     this.overlay = "diff";
     this.render();
-    } catch (e) { toast(`Diff nicht lesbar: ${String(e)}`, "err"); }
+    } catch (e) { toast(m`Diff nicht lesbar: ${String(e)}`, "err"); }
   }
 
   private closeOverlay() {
@@ -928,17 +966,17 @@ class App implements PanelCtx {
     let update=false;
     if (local) {
       const same=local.short_hash===b.short_hash;
-      const action=await modal("Lokaler Branch bereits vorhanden", `„${local.name}“ (${local.short_hash}) existiert bereits. „${b.name}“ steht auf ${b.short_hash}. ${same ? "Beide zeigen auf denselben Commit." : "Du kannst den lokalen Stand öffnen oder ihn ohne Verlust lokaler Commits auf den Remote-Stand vorziehen (Fast-forward). Eigene Commits und offene Dateiänderungen werden dabei geschützt."}`, [
-        {label:"Abbrechen",value:"cancel"},
-        ...(!same ? [{label:"Mit Remote aktualisieren",value:"update"}] : []),
-        {label:"Lokalen Branch öffnen",value:"open",primary:true},
+      const action=await modal(t("Lokaler Branch bereits vorhanden"), m`„${local.name}“ (${local.short_hash}) existiert bereits. „${b.name}“ steht auf ${b.short_hash}. ${same ? t("Beide zeigen auf denselben Commit.") : t("Du kannst den lokalen Stand öffnen oder ihn ohne Verlust lokaler Commits auf den Remote-Stand vorziehen (Fast-forward). Eigene Commits und offene Dateiänderungen werden dabei geschützt.")}`, [
+        {label:t("Abbrechen"),value:"cancel"},
+        ...(!same ? [{label:t("Mit Remote aktualisieren"),value:"update"}] : []),
+        {label:t("Lokalen Branch öffnen"),value:"open",primary:true},
       ]);
       if (!action || action==="cancel" || root!==this.snap?.root) return;
       update=action==="update";
     }
-    toast(`${update ? "Aktualisiere" : "Wechsle zu"} ${b.name} …`, "info");
+    toast(`${update ? t("Aktualisiere") : t("Wechsle zu")} ${b.name} …`, "info");
     await this.run(
-      update ? `Aktualisiere ${b.checkout_name} aus ${b.name}` : `Wechsel zu ${local?.name ?? b.name}`,
+      update ? m`Aktualisiere ${b.checkout_name} aus ${b.name}` : m`Wechsel zu ${local?.name ?? b.name}`,
       () => api.checkout(local && !update ? local.name : b.name, {
         track: b.is_remote && !local,
         localName: b.is_remote ? b.checkout_name : undefined,
@@ -954,13 +992,13 @@ class App implements PanelCtx {
   }
 
   private async mergeBranch(b: BranchInfo) {
-    if(!canMergeInto(this.snap?.head_branch)) { toast("Für diesen Branch verwendest du Merge Requests in GitLab.","info"); return; }
+    if(!canMergeInto(this.snap?.head_branch)) { toast(t("Für diesen Branch verwendest du Merge Requests in GitLab."),"info"); return; }
     if (this.busy || b.is_current || !(await this.leaveMerge()) || this.gitOperationRunning()) return;
     const target = this.snap?.head_branch ?? "HEAD";
     const ok = await confirmDialog(
-      `„${b.name}“ in „${target}“ mergen?`,
-      this.noFF ? "Quelle → aktueller Branch. Erzeugt einen Merge-Commit; Konflikte öffnest du direkt im Editor." : "Quelle → aktueller Branch. Fast-forward, wenn möglich.",
-      "Jetzt mergen",
+      m`„${b.name}“ in „${target}“ mergen?`,
+      this.noFF ? t("Quelle → aktueller Branch. Erzeugt einen Merge-Commit; Konflikte öffnest du direkt im Editor.") : t("Quelle → aktueller Branch. Fast-forward, wenn möglich."),
+      t("Jetzt mergen"),
     );
     if (!ok) return;
     await this.runMerge(`Merge ${b.name}`, () => api.mergeBranch(b.name, this.noFF));
@@ -969,12 +1007,12 @@ class App implements PanelCtx {
   private async deleteBranch(b: BranchInfo) {
     if (this.busy || b.is_current || this.gitOperationRunning()) return;
     const ok = await confirmDialog(
-      `Branch „${b.name}“ ${b.is_remote ? "auf dem Remote " : ""}löschen?`,
-      b.is_remote ? "Entfernt den Branch auf dem Remote per push --delete." : "Nur vollständig gemergte Branches werden gelöscht. Ungemergte Commits bleiben geschützt.",
-      "Löschen",
+      m`Branch „${b.name}“ ${b.is_remote ? t("auf dem Remote ") : ""}löschen?`,
+      b.is_remote ? t("Entfernt den Branch auf dem Remote per push --delete.") : t("Nur vollständig gemergte Branches werden gelöscht. Ungemergte Commits bleiben geschützt."),
+      t("Löschen"),
     );
     if (!ok) return;
-    await this.run("Branch löschen", async () => {
+    await this.run(t("Branch löschen"), async () => {
       if (b.is_remote) return api.deleteBranch(b.name, false, true);
       return api.deleteBranch(b.name, false, false);
     });
@@ -984,19 +1022,19 @@ class App implements PanelCtx {
     if (this.busy || this.gitOperationRunning() || !(await this.leaveMerge())) return;
     const start = from ? from.name : this.snap?.head_branch ?? null;
     const name = await askText(
-      "Neuer Branch",
-      from ? `Startpunkt: ${from.name.replace(/^refs\/tags\//, "Tag ")}` : `Startpunkt: ${start ?? "HEAD"}`,
+      t("Neuer Branch"),
+      from ? m`Startpunkt: ${from.name.replace(/^refs\/tags\//, "Tag ")}` : m`Startpunkt: ${start ?? "HEAD"}`,
       from ? `feature/${from.checkout_name.split("/").pop()}` : "feature/",
     );
     if (name) {
-      await this.run("Branch anlegen", () => api.createBranch(name, start, true));
+      await this.run(t("Branch anlegen"), () => api.createBranch(name, start, true));
       if (this.snap?.head_branch === name) { this.overlay = "none"; this.comparison = null; this.tab = "branches"; this.render(); }
     }
   }
 
   private gitOperationRunning(): boolean {
     if (!this.snap?.merging && !this.snap?.rebasing && !this.snap?.cherry_picking) return false;
-    toast("Ein Git-Vorgang läuft. Schließe ihn zuerst unter Änderungen ab.", "err");
+    toast(t("Ein Git-Vorgang läuft. Schließe ihn zuerst unter Änderungen ab."), "err");
     return true;
   }
 
@@ -1004,27 +1042,33 @@ class App implements PanelCtx {
     if (this.busy || !(await this.leaveMerge())) return;
     try {
       const a = this.snap?.head;
-      if (!a) { toast("Für einen Vergleich ist zuerst ein Commit nötig.", "info"); return; }
+      if (!a) { toast(t("Für einen Vergleich ist zuerst ein Commit nötig."), "info"); return; }
       const resolved = await api.gitRaw(["rev-parse", "--verify", `${b.full_name}^{commit}`]);
       if (!resolved.ok) throw new Error(resolved.stderr);
       const revision = resolved.stdout.trim();
       const files = await api.compareFiles(a, revision);
-      this.comparison = { a, b: revision, label: b.name, files };
-      this.compareHost.innerHTML = `<div class="panel-pad"><header class="page-heading"><div><h1>${b.full_name.startsWith("refs/tags/") ? "Tag-Vergleich" : "Branch-Vergleich"}</h1>
-        <p class="muted"><strong>${esc(this.snap?.head_branch ?? "HEAD")}</strong> → <strong>${esc(b.name)}</strong> · ${files.length} geänderte Dateien</p></div>
+      this.comparison = { a, b: revision, label: b.name, files, tag:b.full_name.startsWith("refs/tags/") };
+      this.renderComparison();
+      this.overlay = "compare"; this.render();
+    } catch(e) { toast(m`Vergleich fehlgeschlagen: ${String(e)}`, "err"); }
+  }
+
+  private renderComparison(): void {
+    const c=this.comparison;if(!c)return;
+    const files=c.files;
+      this.compareHost.innerHTML = h`<div class="panel-pad"><header class="page-heading"><div><h1>${c.tag ? t("Tag-Vergleich") : t("Branch-Vergleich")}</h1>
+        <p class="muted"><strong>${esc(this.snap?.head_branch ?? "HEAD")}</strong> → <strong>${esc(c.label)}</strong> · ${files.length} geänderte Dateien</p></div>
         <button class="btn" data-compare-close>Zurück zur Übersicht</button></header>
         <p class="muted">Vergleicht die gespeicherten Commits. Deine Arbeitskopie wird nicht verändert.</p>
-        ${files.length ? `<div class="rows">${files.map((f,i)=>`<button class="compare-file" data-compare-file="${i}"><span class="chip mono">${esc(f.status)}</span><span class="mono">${esc(f.path)}</span><span class="right">Diff öffnen →</span></button>`).join("")}</div>` : '<div class="empty"><b>Keine Unterschiede</b><span>Beide Branches enthalten dieselben Dateien.</span></div>'}</div>`;
+        ${files.length ? `<div class="rows">${files.map((f,i)=>h`<button class="compare-file" data-compare-file="${i}"><span class="chip mono">${esc(f.status)}</span><span class="mono">${esc(f.path)}</span><span class="right">Diff öffnen →</span></button>`).join("")}</div>` : h`<div class="empty"><b>Keine Unterschiede</b><span>Beide Branches enthalten dieselben Dateien.</span></div>`}</div>`;
       this.compareHost.querySelector('[data-compare-close]')?.addEventListener("click",()=>this.closeOverlay());
       this.compareHost.querySelectorAll('[data-compare-file]').forEach(button=>button.addEventListener("click",()=>{
         const c = this.comparison; if (!c) return;
         const file = c.files[Number((button as HTMLElement).dataset.compareFile)];
         void api.versionsDiff(c.a, c.b, file.path, this.snap?.head_branch ?? "HEAD", c.label).then(diff=>{
           this.diffView.set(diff); this.diffView.mount(this.diffHost); this.overlay = "diff"; this.render();
-        }).catch(e=>toast(`Diff nicht lesbar: ${String(e)}`, "err"));
+        }).catch(e=>toast(m`Diff nicht lesbar: ${String(e)}`, "err"));
       }));
-      this.overlay = "compare"; this.render();
-    } catch(e) { toast(`Vergleich fehlgeschlagen: ${String(e)}`, "err"); }
   }
 
   tags() { return this.tagsList; }
@@ -1049,25 +1093,25 @@ class App implements PanelCtx {
       this.tab = "history"; this.overlay = "none"; this.comparison = null;
       this.selectCommit(info.hash);
     } catch(e) {
-      if (request === this.commitRequest) toast(`Tag-Commit nicht lesbar: ${String(e)}`, "err");
+      if (request === this.commitRequest) toast(m`Tag-Commit nicht lesbar: ${String(e)}`, "err");
     }
   }
 
   async pull() {
     if (this.busy || this.standalone || !this.hasRepo) return;
     if (this.snap?.merging || this.snap?.rebasing || this.snap?.cherry_picking) {
-      toast("Schließe zuerst den laufenden Git-Vorgang ab.", "err"); return;
+      toast(t("Schließe zuerst den laufenden Git-Vorgang ab."), "err"); return;
     }
     const current=this.branchesList.find(b=>b.is_current);
-    if (!current) { toast("Wechsle zuerst auf einen lokalen Branch.", "err"); return; }
+    if (!current) { toast(t("Wechsle zuerst auf einen lokalen Branch."), "err"); return; }
     const root=this.snap?.root;
     let trackSameName=false;
     if (!current.upstream) {
       const candidates=this.branchesList.filter(b=>b.is_remote && b.checkout_name===current.name);
       if (candidates.length!==1) {
-        toast(candidates.length ? "Mehrere gleichnamige Remote-Branches gefunden. Bitte zuerst einen Upstream zuordnen." : "Kein passender Remote-Branch bekannt. Aktualisiere mit Fetch. Falls der Branch nur lokal existiert, kannst du ihn mit Push veröffentlichen.", "info"); return;
+        toast(candidates.length ? t("Mehrere gleichnamige Remote-Branches gefunden. Bitte zuerst einen Upstream zuordnen.") : t("Kein passender Remote-Branch bekannt. Aktualisiere mit Fetch. Falls der Branch nur lokal existiert, kannst du ihn mit Push veröffentlichen."), "info"); return;
       }
-      trackSameName=await confirmDialog("Remote-Branch zuordnen?", `„${current.name}“ hat noch keinen Upstream. Soll „${candidates[0].name}“ dauerhaft für Pull und Push zugeordnet und anschließend Pull ausgeführt werden?`, "Zuordnen und pullen");
+      trackSameName=await confirmDialog(t("Remote-Branch zuordnen?"), m`„${current.name}“ hat noch keinen Upstream. Soll „${candidates[0].name}“ dauerhaft für Pull und Push zugeordnet und anschließend Pull ausgeführt werden?`, t("Zuordnen und pullen"));
       if (!trackSameName || root!==this.snap?.root || current.name!==this.snap?.head_branch) return;
     }
     await this.run("Pull", ()=>api.pull(current.name,trackSameName));
@@ -1080,7 +1124,7 @@ class App implements PanelCtx {
       this.overlay = "none";
       this.tab = "changes";
       this.render();
-      toast("Noch nicht gepusht: Schließe zuerst den Merge unter Änderungen ab. Dabei entsteht der Merge-Commit.", "err");
+      toast(t("Noch nicht gepusht: Schließe zuerst den Merge unter Änderungen ab. Dabei entsteht der Merge-Commit."), "err");
       return;
     }
     await this.run("Push", () => api.push(!this.branchesList.find(b => b.is_current)?.upstream));
@@ -1089,16 +1133,16 @@ class App implements PanelCtx {
   async mergeAbort() {
     if (this.busy || this.mergeEditor.isSaving() || this.standalone || !this.snap?.merging) return;
     const root=this.snap.root,head=this.snap.head;
-    const ok = await confirmDialog("Gesamten Merge abbrechen?", "Verwirft die Konfliktentscheidungen dieses laufenden Merges, auch bereits gespeicherte Auflösungen. Git versucht, den Stand vor dem Merge wiederherzustellen. Bereits vorher vorhandene lokale Änderungen können das verhindern.", "Merge abbrechen");
+    const ok = await confirmDialog(t("Gesamten Merge abbrechen?"), t("Verwirft die Konfliktentscheidungen dieses laufenden Merges, auch bereits gespeicherte Auflösungen. Git versucht, den Stand vor dem Merge wiederherzustellen. Bereits vorher vorhandene lokale Änderungen können das verhindern."), t("Merge abbrechen"));
     if(!ok||root!==this.snap?.root||head!==this.snap?.head||!this.snap.merging)return;
     let aborted=false;
-    await this.run("Merge abbrechen",async()=>{const result=await api.mergeAbort();aborted=result.ok;return result;});
+    await this.run(t("Merge abbrechen"),async()=>{const result=await api.mergeAbort();aborted=result.ok;return result;});
     if(aborted&&root===this.snap?.root&&!this.snap.merging){this.mergeEditor.discardChanges();this.overlay="none";this.tab="changes";this.render();}
   }
 
   mergeContinue() {
-    if (this.statusData.conflicts.length) { toast("Löse zuerst alle Konfliktdateien.", "err"); return; }
-    void this.run("Merge abschließen", () => api.mergeContinue());
+    if (this.statusData.conflicts.length) { toast(t("Löse zuerst alle Konfliktdateien."), "err"); return; }
+    void this.run(t("Merge abschließen"), () => api.mergeContinue());
   }
 
   async runMerge(label: string, fn: () => Promise<MergeOutcome>) {
@@ -1110,12 +1154,12 @@ class App implements PanelCtx {
       const r = await fn();
       this.log(`$ ${label}\n${r.stdout}${r.stderr ? "\n" + r.stderr : ""}`);
       if (r.ok) {
-        this.lastStatus = `${label}: abgeschlossen`;
-        toast(`${label}: abgeschlossen`, "ok");
+        this.lastStatus = m`${label}: abgeschlossen`;
+        toast(m`${label}: abgeschlossen`, "ok");
         this.tab = "changes";
       } else if (r.conflicts.length) {
-        this.lastStatus = `!${label}: ${r.conflicts.length} Konflikt(e)`;
-        toast(`${label}: ${r.conflicts.length} Datei(en) mit Konflikten`, "err");
+        this.lastStatus = m`!${label}: ${r.conflicts.length} Konflikt(e)`;
+        toast(m`${label}: ${r.conflicts.length} Datei(en) mit Konflikten`, "err");
         this.tab = "changes";
         await this.refresh(true);
         const first = this.statusData.conflicts[0];
@@ -1174,7 +1218,7 @@ class App implements PanelCtx {
     this.logs.push(`$ git ${args.join(" ")}`);
     void this.run("git " + args.join(" "), () => api.gitRaw(args), true).then(() => {
       const r = this.logs[this.logs.length - 1];
-      toast(r.split("\n").slice(0, 2).join(" · ") || "ausgeführt", "info");
+      toast(r.split("\n").slice(0, 2).join(" · ") || t("ausgeführt"), "info");
     });
   }
   selectCommit(hash: string) {
@@ -1190,69 +1234,69 @@ class App implements PanelCtx {
     }).catch(e => {
       if (request !== this.commitRequest || root !== this.snap?.root) return;
       this.selectedFiles = [];
-      toast(`Commit-Dateien nicht lesbar: ${String(e)}`, "err");
+      toast(m`Commit-Dateien nicht lesbar: ${String(e)}`, "err");
       this.render();
     });
   }
   stage(paths: string[]) {
     if (!paths.length) return;
-    void this.run("Stagen", () => api.stage(paths), true);
+    void this.run(t("Stagen"), () => api.stage(paths), true);
   }
   unstage(paths: string[]) {
     if (!paths.length) return;
-    void this.run("Unstagen", () => api.unstage(paths), true);
+    void this.run(t("Unstagen"), () => api.unstage(paths), true);
   }
 
   async rollback(paths?: string[]) {
     if (this.busy || !(await this.leaveMerge()) || this.gitOperationRunning()) return;
     const root = this.snap?.root;
     const head = this.snap?.head;
-    if (!root || !head) { toast("Für einen Rollback ist zuerst ein Commit nötig.", "err"); return; }
+    if (!root || !head) { toast(t("Für einen Rollback ist zuerst ein Commit nötig."), "err"); return; }
     try {
       const status = await api.status();
-      if (status.conflicts.length) { toast("Löse zuerst alle Konflikte.", "err"); return; }
+      if (status.conflicts.length) { toast(t("Löse zuerst alle Konflikte."), "err"); return; }
       const files = status.all.filter(file=>file.state !== "untracked" && file.state !== "conflicted");
-      if (!files.length) { toast("Keine versionierten Änderungen für einen Rollback.", "info"); return; }
+      if (!files.length) { toast(t("Keine versionierten Änderungen für einen Rollback."), "info"); return; }
       let selected: string[] | null;
       if (paths?.length === 1) {
         const file = files.find(file=>file.path===paths[0]);
-        if (!file) { toast("Die Datei ist nicht mehr geändert. Bitte aktualisieren.", "info"); return; }
-        const detail = file.index === "A" ? "Diese neu gestagte Datei ist im letzten Commit nicht vorhanden und wird entfernt." : "Setzt diese Datei auf den letzten Commit zurück, einschließlich Staging. Die lokalen Änderungen dieser Datei werden verworfen.";
-        const ok = await confirmDialog(`„${paths[0]}“ zurücksetzen?`, detail, "Zurücksetzen");
+        if (!file) { toast(t("Die Datei ist nicht mehr geändert. Bitte aktualisieren."), "info"); return; }
+        const detail = file.index === "A" ? t("Diese neu gestagte Datei ist im letzten Commit nicht vorhanden und wird entfernt.") : t("Setzt diese Datei auf den letzten Commit zurück, einschließlich Staging. Die lokalen Änderungen dieser Datei werden verworfen.");
+        const ok = await confirmDialog(m`„${paths[0]}“ zurücksetzen?`, detail, t("Zurücksetzen"));
         selected = ok ? paths : null;
       } else selected = await chooseRollback(files, paths);
       if (!selected || root !== this.snap?.root) return;
       await this.run("Rollback",()=>api.rollback(selected,head));
-    } catch(e) { toast(`Rollback nicht möglich: ${String(e)}`, "err"); }
+    } catch(e) { toast(m`Rollback nicht möglich: ${String(e)}`, "err"); }
   }
 
   async discard(paths: string[]) {
     if (!paths.length) return;
     const ok = await confirmDialog(
-      paths.length === 1 ? `Änderungen an „${paths[0]}“ verwerfen?` : `${paths.length} Dateien verwerfen?`,
-      "Nicht gespeicherte Änderungen gehen verloren.",
-      "Verwerfen",
+      paths.length === 1 ? m`Änderungen an „${paths[0]}“ verwerfen?` : m`${paths.length} Dateien verwerfen?`,
+      t("Nicht gespeicherte Änderungen gehen verloren."),
+      t("Verwerfen"),
     );
     if (!ok) return;
-    void this.run("Verwerfen", () => api.discard(paths), true);
+    void this.run(t("Verwerfen"), () => api.discard(paths), true);
   }
   async resolveSide(path: string, side: "ours" | "theirs") {
     const ok = await confirmDialog(
-      `${side === "ours" ? "Lokale" : "Eingehende"} Fassung komplett nehmen?`,
+      m`${side === "ours" ? t("Lokale") : t("Eingehende")} Fassung komplett nehmen?`,
       path,
     );
     if (!ok) return;
-    void this.run("Konflikt auflösen", () => api.resolveWithSide(path, side));
+    void this.run(t("Konflikt auflösen"), () => api.resolveWithSide(path, side));
   }
   commit(message: string, amend: boolean) {
     if (this.snap?.merging || this.statusData.conflicts.length || this.snap?.rebasing || this.snap?.cherry_picking) {
-      toast("Schließe zuerst den laufenden Git-Vorgang ab oder löse die Konflikte.", "err"); return;
+      toast(t("Schließe zuerst den laufenden Git-Vorgang ab oder löse die Konflikte."), "err"); return;
     }
     if (!amend && !this.statusData.staged.length) {
-      toast(this.statusData.all.length ? "Keine Dateien vorgemerkt. Hake zuerst die Änderungen an, die du committen möchtest." : "Keine Änderungen vorhanden – es gibt nichts Neues zu committen.", "info"); return;
+      toast(this.statusData.all.length ? t("Keine Dateien vorgemerkt. Hake zuerst die Änderungen an, die du committen möchtest.") : t("Keine Änderungen vorhanden – es gibt nichts Neues zu committen."), "info"); return;
     }
     if (!message.trim() && !amend) {
-      toast("Bitte eine Commit-Nachricht eingeben", "err");
+      toast(t("Bitte eine Commit-Nachricht eingeben"), "err");
       return;
     }
     void this.run("Commit", () => api.commit(message, amend, false, false));

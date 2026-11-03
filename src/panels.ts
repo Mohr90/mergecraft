@@ -1,3 +1,4 @@
+import { t, h, m } from "./i18n";
 // Panels: Änderungen, Branch-Liste, Historie, Konsole.
 
 import type {
@@ -69,19 +70,19 @@ function fileRow(
   area = "work",
 ): string {
   const { dir, base } = splitPath(entry.path);
-  return `
+  return h`
     <div class="row" data-path="${esc(entry.path)}" data-area="${area}">
-      ${entry.state !== "conflicted" ? `<label class="stage-check" title="${area === "staged" ? "Aus dem nächsten Commit herausnehmen" : "Änderungen für den nächsten Commit vormerken"}"><input type="checkbox" data-stage-file="${area}" ${area === "staged" ? "checked" : ""} aria-label="${area === "staged" ? "Für Commit vorgemerkt" : "Für Commit vormerken"}: ${esc(entry.path)}"></label>` : ""}
+      ${entry.state !== "conflicted" ? `<label class="stage-check" title="${area === "staged" ? t("Aus dem nächsten Commit herausnehmen") : t("Änderungen für den nächsten Commit vormerken")}"><input type="checkbox" data-stage-file="${area}" ${area === "staged" ? "checked" : ""} aria-label="${area === "staged" ? t("Für Commit vorgemerkt") : t("Für Commit vormerken")}: ${esc(entry.path)}"></label>` : ""}
       <span class="status ${entry.state}" title="${esc(entry.conflict_code ?? entry.state)}">${
         esc(entry.conflict_code ?? STATUS_LETTER[entry.state] ?? "?")
       }</span>
       <button class="fpath" data-row-act="diff" title="Änderungen ansehen: ${esc(entry.path)}"><span class="dir">${esc(dir)}</span><b>${esc(base)}</b></button>
       ${
         entry.orig_path
-          ? `<span class="chip">aus ${esc(entry.orig_path)}</span>`
+          ? h`<span class="chip">aus ${esc(entry.orig_path)}</span>`
           : ""
       }
-      ${entry.partial ? `<span class="partial-stage" title="Ein Teil dieser Datei ist vorgemerkt. Weitere Änderungen stehen unter „Noch nicht vorgemerkt“.">Weitere Änderungen</span>` : ""}
+      ${entry.partial ? h`<span class="partial-stage" title="Ein Teil dieser Datei ist vorgemerkt. Weitere Änderungen stehen unter „Noch nicht vorgemerkt“.">Weitere Änderungen</span>` : ""}
       <span class="actions">
         ${actions
           .filter(a => !["diff","stage","unstage"].includes(a.act))
@@ -99,22 +100,22 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
   const st = ctx.status();
   const wrap = el("div", "panel-pad changes-panel");
   if (!st) {
-    wrap.appendChild(el("div", "empty", `${icon("changes", 26)}<b>Kein Repository geöffnet</b>`));
+    wrap.appendChild(el("div", "empty", h`${icon("changes", 26)}<b>Kein Repository geöffnet</b>`));
     return wrap;
   }
   const snap = ctx.snapshot?.();
   const blocked = !!(st.merging || st.conflicts.length || snap?.rebasing || snap?.cherry_picking);
   const tracked = st.staged.length + st.changed.length;
-  wrap.insertAdjacentHTML("beforeend", `<header class="page-heading"><div><h1>Änderungen</h1><p class="muted">Prüfe deine Änderungen und bereite den nächsten Commit vor.</p></div>
+  wrap.insertAdjacentHTML("beforeend", h`<header class="page-heading"><div><h1>Änderungen</h1><p class="muted">Prüfe deine Änderungen und bereite den nächsten Commit vor.</p></div>
     <div class="changes-actions"><button class="btn" data-top-act="rollback" ${blocked || !tracked || !snap?.head ? "disabled" : ""}>${icon("undo",14)} Rollback …</button></div></header>`);
   const mergingBanner = st.merging
-    ? `<div class="banner error">${icon("merge", 15)}
-        <b>Merge noch nicht abgeschlossen.</b> ${st.conflicts.length ? `${st.conflicts.length} Datei(en) mit Konflikten. Löse diese zuerst.` : "Alle Konflikte sind gelöst. „Merge abschließen“ erstellt den Merge-Commit. Danach kannst du pushen."}
+    ? h`<div class="banner error">${icon("merge", 15)}
+        <b>Merge noch nicht abgeschlossen.</b> ${st.conflicts.length ? m`${st.conflicts.length} Datei(en) mit Konflikten. Löse diese zuerst.` : t("Alle Konflikte sind gelöst. „Merge abschließen“ erstellt den Merge-Commit. Danach kannst du pushen.")}
         <span class="right"><button class="btn" data-top-act="merge-abort">Merge abbrechen</button>
         ${
           st.conflicts.length === 0
-            ? `<button class="btn primary" data-top-act="merge-continue">Merge abschließen</button>`
-            : `<button class="btn primary" data-top-act="resolve-first">Konflikte lösen</button>`
+            ? h`<button class="btn primary" data-top-act="merge-continue">Merge abschließen</button>`
+            : h`<button class="btn primary" data-top-act="resolve-first">Konflikte lösen</button>`
         }</span></div>`
     : "";
   if (mergingBanner) wrap.insertAdjacentHTML("beforeend", mergingBanner);
@@ -135,35 +136,35 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
   const conflictRows = st.conflicts
     .map((e) =>
       fileRow(e, [
-        { act: "merge", label: "auflösen", title: "Merge-Editor öffnen", primary: true },
-        { act: "take-ours", label: "lokal", title: "Komplett die lokale Fassung nehmen" },
-        { act: "take-theirs", label: "eingehend", title: "Komplett die eingehende Fassung nehmen" },
+        { act: "merge", label: t("auflösen"), title: t("Merge-Editor öffnen"), primary: true },
+        { act: "take-ours", label: t("lokal"), title: t("Komplett die lokale Fassung nehmen") },
+        { act: "take-theirs", label: t("eingehend"), title: t("Komplett die eingehende Fassung nehmen") },
       ]),
     )
     .join("");
   const stagedRows = st.staged
     .map((e) =>
       fileRow({...e,partial:st.changed.some(file=>file.path===e.path)}, [
-        { act: "diff", label: "Diff", title: "Änderungen ansehen" },
-        { act: "unstage", label: "Herausnehmen", title: "Zurück in die Arbeitskopie" },
-        { act: "rollback", label: "Rollback", title: "Auf den letzten Commit zurücksetzen", danger: true, disabled: blocked },
+        { act: "diff", label: "Diff", title: t("Änderungen ansehen") },
+        { act: "unstage", label: t("Herausnehmen"), title: t("Zurück in die Arbeitskopie") },
+        { act: "rollback", label: "Rollback", title: t("Auf den letzten Commit zurücksetzen"), danger: true, disabled: blocked },
       ], "staged"),
     )
     .join("");
   const changedRows = st.changed
     .map((e) =>
       fileRow(e, [
-        { act: "diff", label: "Diff", title: "Änderungen ansehen" },
-        { act: "stage", label: "Vormerken", title: "Zum Commit vormerken" },
-        { act: "rollback", label: "Rollback", title: "Auf den letzten Commit zurücksetzen", danger: true, disabled: blocked },
+        { act: "diff", label: "Diff", title: t("Änderungen ansehen") },
+        { act: "stage", label: t("Vormerken"), title: t("Zum Commit vormerken") },
+        { act: "rollback", label: "Rollback", title: t("Auf den letzten Commit zurücksetzen"), danger: true, disabled: blocked },
       ]),
     )
     .join("");
   const untrackedRows = st.untracked
     .map((e) =>
       fileRow(e, [
-        { act: "stage", label: "Vormerken", title: "Zum Commit vormerken" },
-        { act: "discard", label: "löschen", title: "Datei löschen", danger: true },
+        { act: "stage", label: t("Vormerken"), title: t("Zum Commit vormerken") },
+        { act: "discard", label: t("löschen"), title: t("Datei löschen"), danger: true },
       ], "untracked"),
     )
     .join("");
@@ -171,13 +172,13 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
   wrap.insertAdjacentHTML(
     "beforeend",
     `
-    ${section("Konflikte", st.conflicts, conflictRows)}
-    ${section("Für Commit vorgemerkt", st.staged, stagedRows)}
-    ${section("Noch nicht vorgemerkt", st.changed, changedRows)}
-    ${section("Neue Dateien", st.untracked, untrackedRows)}
+    ${section(t("Konflikte"), st.conflicts, conflictRows)}
+    ${section(t("Für Commit vorgemerkt"), st.staged, stagedRows)}
+    ${section(t("Noch nicht vorgemerkt"), st.changed, changedRows)}
+    ${section(t("Neue Dateien"), st.untracked, untrackedRows)}
     ${
       st.all.length === 0
-        ? `<div class="empty">${icon("check", 26)}<b>Arbeitskopie ist sauber</b><div class="small">Keine Änderungen, keine Konflikte.</div></div>`
+        ? h`<div class="empty">${icon("check", 26)}<b>Arbeitskopie ist sauber</b><div class="small">Keine Änderungen, keine Konflikte.</div></div>`
         : ""
     }`,
   );
@@ -186,7 +187,7 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
   const selectable = st.staged.length + pending.length;
   if(selectable) {
     const selection=el("div","staging-summary");
-    selection.innerHTML=`<label><input type="checkbox" data-stage-all aria-label="Alle Änderungen für Commit vormerken" ${st.staged.length && !pending.length ? "checked" : ""}><span>Alle Änderungen</span></label><span class="small muted">${st.staged.length} vorgemerkt · ${pending.length} offen</span>`;
+    selection.innerHTML=h`<label><input type="checkbox" data-stage-all aria-label="Alle Änderungen für Commit vormerken" ${st.staged.length && !pending.length ? "checked" : ""}><span>Alle Änderungen</span></label><span class="small muted">${st.staged.length} vorgemerkt · ${pending.length} offen</span>`;
     selection.querySelector<HTMLInputElement>("input")!.indeterminate=st.staged.length>0 && pending.length>0;
     wrap.appendChild(selection);
   }
@@ -215,7 +216,7 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
 
   // Commit-Box
   const box = el("section", "commit-box");
-  box.innerHTML = `
+  box.innerHTML = h`
     <div class="commit-heading"><label for="commit-message">Commit vorbereiten</label><span class="commit-count">${st.staged.length} vorgemerkt</span>
       <button class="mini" data-top-act="last-message" title="Eine vorherige Commit-Nachricht übernehmen">Letzte Nachricht</button></div>
     <textarea id="commit-message" aria-label="Commit-Nachricht" class="commit-msg" placeholder="Commit-Nachricht …" rows="3"></textarea>
@@ -235,12 +236,12 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
   const mode = box.querySelector<HTMLSelectElement>(".commit-mode")!;
   const updateCommit = () => {
     const button=box.querySelector<HTMLButtonElement>('[data-top-act="commit"]')!;
-    button.innerHTML=`${icon("check",14)} ${mode.value === "amend" ? "Commit ändern" : "Commit"} <span class="kbd">Strg+↵</span>`;
+    button.innerHTML=h`${icon("check",14)} ${mode.value === "amend" ? t("Commit ändern") : "Commit"} <span class="kbd">Strg+↵</span>`;
     const amend=mode.value === "amend";
     button.disabled=blocked || (!amend && !st.staged.length) || (amend && !snap?.head);
-    const hint=blocked ? "Schließe zuerst den laufenden Git-Vorgang ab oder löse die Konflikte." : amend ? "Ändert den letzten Commit. Das ist auch ohne Dateiänderungen möglich." : st.staged.length ? "Die angehakten Änderungen werden lokal gespeichert. Danach kannst du pushen." : st.all.length ? "Hake zuerst die Dateien an, die du committen möchtest." : "Keine Änderungen vorhanden – es gibt nichts Neues zu committen.";
+    const hint=blocked ? t("Schließe zuerst den laufenden Git-Vorgang ab oder löse die Konflikte.") : amend ? t("Ändert den letzten Commit. Das ist auch ohne Dateiänderungen möglich.") : st.staged.length ? t("Die angehakten Änderungen werden lokal gespeichert. Danach kannst du pushen.") : st.all.length ? t("Hake zuerst die Dateien an, die du committen möchtest.") : t("Keine Änderungen vorhanden – es gibt nichts Neues zu committen.");
     box.querySelector(".commit-hint")!.textContent=hint;
-    button.title=button.disabled ? hint : "Lokalen Commit erstellen (Strg+Enter). Mit Push veröffentlichen.";
+    button.title=button.disabled ? hint : t("Lokalen Commit erstellen (Strg+Enter). Mit Push veröffentlichen.");
   };
   mode.addEventListener("change", updateCommit);
   updateCommit();
@@ -297,7 +298,7 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
         const rect = (target as HTMLElement).getBoundingClientRect();
         menu.style.left = `${Math.max(8, rect.left - 240)}px`;
         menu.style.top = `${rect.bottom + 6}px`;
-        menu.innerHTML = `<div class="group-title">Letzte Commit-Nachrichten</div><div class="list">${subjects
+        menu.innerHTML = h`<div class="group-title">Letzte Commit-Nachrichten</div><div class="list">${subjects
           .map(
             (s, i) =>
               `<div class="pop-item" data-msg="${i}"><span class="bsub" style="flex:1">${esc(s)}</span></div>`,
@@ -346,18 +347,18 @@ export function renderBranches(ctx: PanelCtx, state: BranchViewState = {query: "
   const target = ctx.snapshot()?.head_branch ?? "detached HEAD";
   const allowMerge=canMergeInto(ctx.snapshot()?.head_branch);
   const merging = !!(ctx.snapshot()?.merging || ctx.snapshot()?.rebasing || ctx.snapshot()?.cherry_picking);
-  wrap.innerHTML = `
+  wrap.innerHTML = h`
     <div class="branch-toolbar"><header class="page-heading"><div><h1>Branches</h1>
       <p class="muted">Branches durchsuchen, wechseln und vergleichen.</p></div>
       <button class="btn primary" data-branch-act="create" ${merging ? "disabled" : ""}>${icon("plus", 14)} Neuer Branch</button></header>
-    ${merging ? `<div class="banner warn" role="status">Ein Git-Vorgang läuft. Löse zuerst die Konflikte unter „Änderungen“ und schließe den Vorgang ab.</div>` : ""}
+    ${merging ? h`<div class="banner warn" role="status">Ein Git-Vorgang läuft. Löse zuerst die Konflikte unter „Änderungen“ und schließe den Vorgang ab.</div>` : ""}
     <div class="branch-tools">
       <label class="branch-search">${icon("search", 16)}<input type="search" aria-label="Branches filtern" placeholder="Name oder letzte Commit-Nachricht …"></label>
       <label class="small">Anzeigen <select class="branch-scope" aria-label="Branch-Typ"><option value="all">Alle Branches</option><option value="local">Nur lokal</option><option value="remote">Nur remote</option></select></label>
       <label class="small">Sortierung <select class="branch-sort" aria-label="Branches sortieren"><option value="recent">Zuletzt geändert</option><option value="name">Name A–Z</option></select></label>
     </div>
-    ${allowMerge ? `<div class="merge-direction">${icon("merge", 16)}<span>„Mergen“ übernimmt den gewählten Branch in <strong class="mono">${esc(target)}</strong>.</span>
-      <label class="switch"><input type="checkbox" class="opt-noff" ${ctx.mergeNoFF() ? "checked" : ""}> Immer Merge-Commit erstellen</label></div>` : `<p class="integration-note">Integration in <span class="mono">${esc(target)}</span> über Merge Requests in GitLab.</p>`}
+    ${allowMerge ? h`<div class="merge-direction">${icon("merge", 16)}<span>„Mergen“ übernimmt den gewählten Branch in <strong class="mono">${esc(target)}</strong>.</span>
+      <label class="switch"><input type="checkbox" class="opt-noff" ${ctx.mergeNoFF() ? "checked" : ""}> Immer Merge-Commit erstellen</label></div>` : h`<p class="integration-note">Integration in <span class="mono">${esc(target)}</span> über Merge Requests in GitLab.</p>`}
     <div class="branch-filter-status" role="status"></div></div>
     <div class="branch-groups"></div>`;
   const search = wrap.querySelector('input[type="search"]') as HTMLInputElement;
@@ -372,12 +373,12 @@ export function renderBranches(ctx: PanelCtx, state: BranchViewState = {query: "
       && (scope.value === "all" || b.is_remote === (scope.value === "remote")))
       .sort((a,b) => Number(b.is_current)-Number(a.is_current) || (sort.value === "name" ? a.name.localeCompare(b.name) : b.timestamp-a.timestamp));
     const filteredActive = !!query || scope.value !== "all";
-    wrap.querySelector(".branch-filter-status")!.innerHTML = `<span>${filtered.length} von ${all.length} Branches${filteredActive ? " · gefiltert" : ""}</span>${filteredActive ? '<button class="mini" data-branch-act="reset">Filter zurücksetzen</button>' : ""}`;
+    wrap.querySelector(".branch-filter-status")!.innerHTML = h`<span>${filtered.length} von ${all.length} Branches${filteredActive ? t(" · gefiltert") : ""}</span>${filteredActive ? h`<button class="mini" data-branch-act="reset">Filter zurücksetzen</button>` : ""}`;
     const favorites = ctx.favoriteBranches?.() ?? new Set<string>();
     groups.innerHTML = ["favorites", "local", "remote"].map(group => {
       const rows = filtered.filter(b=>group === "favorites" ? favorites.has(b.name) : !favorites.has(b.name) && b.is_remote === (group === "remote"));
-      return rows.length ? `<section class="section"><header><h2>${group === "favorites" ? "Favoriten" : group === "remote" ? "Remote-Branches" : "Lokale Branches"}</h2><span class="count">${rows.length}</span></header><div class="rows">${rows.map(b=>branchRow(b, merging, target, favorites.has(b.name), allowMerge)).join("")}</div></section>` : "";
-    }).join("") || `<div class="empty"><b>${all.length ? "Keine passenden Branches" : "Noch keine Branches"}</b><span>${all.length ? "Passe Suche oder Filter an." : "Erstelle zuerst einen Commit unter Änderungen."}</span></div>`;
+      return rows.length ? `<section class="section"><header><h2>${group === "favorites" ? t("Favoriten") : group === "remote" ? t("Remote-Branches") : t("Lokale Branches")}</h2><span class="count">${rows.length}</span></header><div class="rows">${rows.map(b=>branchRow(b, merging, target, favorites.has(b.name), allowMerge)).join("")}</div></section>` : "";
+    }).join("") || `<div class="empty"><b>${all.length ? t("Keine passenden Branches") : t("Noch keine Branches")}</b><span>${all.length ? t("Passe Suche oder Filter an.") : t("Erstelle zuerst einen Commit unter Änderungen.")}</span></div>`;
   };
   const filterChanged = () => { state.scrollTop = 0; draw(); groups.scrollTop = 0; };
   search.addEventListener("input", filterChanged); scope.addEventListener("change", filterChanged); sort.addEventListener("change", filterChanged);
@@ -446,22 +447,22 @@ export function renderBranches(ctx: PanelCtx, state: BranchViewState = {query: "
 function branchRow(b: BranchInfo, blocked: boolean, target: string, favorite = false, allowMerge = true): string {
   const disabled = blocked ? "disabled" : "";
   const sync=b.is_remote ? null : branchSync(b);
-  return `<div class="branch-row${b.is_current ? " current" : ""}" data-name="${esc(b.name)}">
-    <button class="favorite-button" data-b-act="favorite" aria-pressed="${favorite}" aria-label="${esc(b.name)} ${favorite ? "aus Favoriten entfernen" : "als Favorit merken"}">${favorite ? "★" : "☆"}</button>
+  return h`<div class="branch-row${b.is_current ? " current" : ""}" data-name="${esc(b.name)}">
+    <button class="favorite-button" data-b-act="favorite" aria-pressed="${favorite}" aria-label="${esc(b.name)} ${favorite ? t("aus Favoriten entfernen") : t("als Favorit merken")}">${favorite ? "★" : "☆"}</button>
     <span class="dot${b.is_current ? " on" : ""}"></span>
     <div class="branch-detail"><div class="branch-identity"><span class="bname">${esc(b.name)}</span>
-      ${b.is_current ? '<span class="chip head">Aktueller Branch</span>' : ""}
+      ${b.is_current ? h`<span class="chip head">Aktueller Branch</span>` : ""}
       ${sync ? `<span class="chip sync-${sync.tone}" title="${esc(sync.detail)}">${esc(sync.label)}</span>` : ""}</div>
-      <div class="branch-meta"><span class="bsub" title="${esc(b.subject)}">${esc(b.subject || "Kein Commit")}</span>
+      <div class="branch-meta"><span class="bsub" title="${esc(b.subject)}">${esc(b.subject || t("Kein Commit"))}</span>
       <span class="bdate" title="${esc(absTime(b.timestamp))}">${esc(b.short_hash)} · ${esc(relTime(b.timestamp))}</span></div>
-      <span class="small muted">${b.upstream ? `Verfolgt ${esc(b.upstream)}` : b.is_remote ? "Remote · beim Wechsel lokal verfolgen" : "Lokal · kein Upstream"}</span></div>
+      <span class="small muted">${b.upstream ? m`Verfolgt ${esc(b.upstream)}` : b.is_remote ? t("Remote · beim Wechsel lokal verfolgen") : t("Lokal · kein Upstream")}</span></div>
     <div class="actions">
-      ${!b.is_current ? `<button class="btn" data-b-act="checkout" ${disabled}>Wechseln</button>
+      ${!b.is_current ? h`<button class="btn" data-b-act="checkout" ${disabled}>Wechseln</button>
         <button class="btn" data-b-act="compare">Vergleichen</button>
-        ${allowMerge ? `<button class="btn primary" data-b-act="merge" ${disabled} title="In ${esc(target)} mergen">${icon("merge", 13)} Mergen</button>` : ""}` : ""}
+        ${allowMerge ? h`<button class="btn primary" data-b-act="merge" ${disabled} title="In ${esc(target)} mergen">${icon("merge", 13)} Mergen</button>` : ""}` : ""}
       <details class="branch-more"><summary aria-label="Weitere Aktionen für ${esc(b.name)}" aria-haspopup="menu" aria-expanded="false">${icon("more",16)}<span>Mehr</span></summary><div class="branch-more-menu" role="menu" aria-label="Aktionen für ${esc(b.name)}"><div class="branch-menu-heading">${esc(b.name)}</div>
         <button class="btn ghost" data-b-act="newfrom" role="menuitem" ${disabled}>Neuer Branch von hier</button>
-        ${!b.is_current ? `<button class="btn danger" data-b-act="delete" role="menuitem" ${disabled}>${b.is_remote ? "Remote-Branch löschen" : "Branch löschen"}</button>` : ""}
+        ${!b.is_current ? `<button class="btn danger" data-b-act="delete" role="menuitem" ${disabled}>${b.is_remote ? t("Remote-Branch löschen") : t("Branch löschen")}</button>` : ""}
       </div></details>
     </div></div>`;
 }
@@ -474,13 +475,13 @@ export function renderHistory(ctx: PanelCtx): HTMLElement {
   const files = ctx.commitFiles();
   const sel = commits.find((c) => c.hash === selected);
   wrap.innerHTML = `
-    ${ctx.historyPath ? `<header class="page-heading"><h1>Dateihistorie: ${esc(ctx.historyPath)}</h1><button class="btn" data-all-history>Gesamte Historie</button></header>` : ""}
+    ${ctx.historyPath ? h`<header class="page-heading"><h1>Dateihistorie: ${esc(ctx.historyPath)}</h1><button class="btn" data-all-history>Gesamte Historie</button></header>` : ""}
     <div class="hist" style="height:calc(100vh - 120px)">
       <div class="hist-list">
         ${
           commits.length
             ? commits.map((c) => commitRow(c, selected === c.hash)).join("")
-            : `<div class="empty">${icon("history", 26)}<b>Keine Commits</b></div>`
+            : h`<div class="empty">${icon("history", 26)}<b>Keine Commits</b></div>`
         }
       </div>
       <div class="hist-side">
@@ -492,13 +493,13 @@ export function renderHistory(ctx: PanelCtx): HTMLElement {
                    absTime(sel.timestamp),
                  )}</div>
                </div>`
-            : `<div class="empty">${icon("history", 22)}<b>Commit auswählen</b><div class="small">um die geänderten Dateien zu sehen</div></div>`
+            : h`<div class="empty">${icon("history", 22)}<b>Commit auswählen</b><div class="small">um die geänderten Dateien zu sehen</div></div>`
         }
         ${
           sel && files.length
             ? `<div class="rows">${files
                 .map(
-                  (f) => `
+                  (f) => h`
               <div class="row" data-path="${esc(f.path)}">
                 <span class="status ${f.status.startsWith("D") ? "changed" : "staged"}">${esc(f.status.trim())}</span>
                 <span class="fpath"><span class="dir">${esc(dirName(f.path))}</span><b>${esc(
@@ -532,7 +533,7 @@ function commitRow(c: CommitInfo, selected: boolean): string {
   const merge = c.parents.length > 1;
   const isHead = c.refs.some((r) => r.includes("HEAD"));
   const dotColor = isHead ? "var(--green)" : merge ? "var(--violet)" : "var(--fg-3)";
-  return `
+  return h`
     <div role="button" tabindex="0" aria-label="Commit ${esc(c.short_hash)}: ${esc(c.subject)}" class="commit-row${selected ? " selected" : ""}" data-hash="${esc(c.hash)}">
       <span class="graph">
         <svg width="22" height="20" viewBox="0 0 22 20">
@@ -567,7 +568,7 @@ function commitRow(c: CommitInfo, selected: boolean): string {
 export function renderConsole(ctx: PanelCtx): HTMLElement {
   const wrap = el("div", "console");
   const log = ctx.logLines();
-  wrap.innerHTML = `
+  wrap.innerHTML = h`
     <div class="log">${
       log.length
         ? log
@@ -577,7 +578,7 @@ export function renderConsole(ctx: PanelCtx): HTMLElement {
                 : esc(l),
             )
             .join("\n\n")
-        : "Bereit. Befehle ohne führendes »git« eingeben, z. B. »status --short«."
+        : t("Bereit. Befehle ohne führendes »git« eingeben, z. B. »status --short«.")
     }</div>
     <div class="input">
       <span class="prompt">git</span>

@@ -1,3 +1,4 @@
+import { h, t } from "./i18n";
 // Branch-Auswahl als Popover mit Suche: wechseln, anlegen, mergen,
 // löschen - mit Tastatursteuerung.
 
@@ -22,12 +23,12 @@ interface Item {
 export function openBranchMenu(anchor: HTMLElement, branches: BranchInfo[], act: BranchMenuActions) {
   document.querySelector(".popover")?.remove();
   const pop = el("div", "popover");
-  pop.innerHTML = `
+  pop.innerHTML = h`
     <div class="search">${icon("search", 15)}<input type="text" aria-label="Branch suchen" placeholder="Branch suchen – lokal und remote" autocomplete="off" /></div>
     <div class="list"></div>
     <footer>
       <button class="btn" data-act="new">${icon("plus", 14)} Neuer Branch</button>
-      <span class="hint"><span class="kbd">↑↓</span> wählen · <span class="kbd">Enter</span> wechseln · ${act.allowMerge === false ? "" : '<span class="kbd">Alt+Enter</span> mergen · '}<span class="kbd">Esc</span> schließen</span>
+      <span class="hint"><span class="kbd">↑↓</span> wählen · <span class="kbd">Enter</span> wechseln · ${act.allowMerge === false ? "" : h`<span class="kbd">Alt+Enter</span> mergen · `}<span class="kbd">Esc</span> schließen</span>
     </footer>`;
   document.body.appendChild(pop);
 
@@ -75,7 +76,7 @@ export function openBranchMenu(anchor: HTMLElement, branches: BranchInfo[], act:
     if (cursor >= items.length) cursor = Math.max(0, items.length - 1);
 
     if (!items.length) {
-      list.innerHTML = `<div class="empty">${icon("branch", 22)}<div>Kein Branch gefunden</div></div>`;
+      list.innerHTML = h`<div class="empty">${icon("branch", 22)}<div>Kein Branch gefunden</div></div>`;
       return;
     }
     const rowHtml = (item: Item, idx: number) => {
@@ -86,11 +87,11 @@ export function openBranchMenu(anchor: HTMLElement, branches: BranchInfo[], act:
       ]
         .filter(Boolean)
         .join(" ");
-      return `
+      return h`
         <div class="pop-item${idx === cursor ? " sel" : ""}${b.is_current ? " current" : ""}" data-idx="${idx}">
           <span class="dot${b.is_current ? " on" : ""}"></span>
           <span class="bname">${markHits(b.name, item.hits)}</span>
-          ${b.is_current ? `<span class="chip head">aktuell</span>` : ""}
+          ${b.is_current ? h`<span class="chip head">aktuell</span>` : ""}
           ${b.upstream ? `<span class="chip mono">→ ${esc(b.upstream)}</span>` : ""}
           ${ab ? `<span class="ab-count">${ab}</span>` : ""}
           <span class="bsub" title="${esc(b.subject)}">${esc(b.subject)}</span>
@@ -98,33 +99,33 @@ export function openBranchMenu(anchor: HTMLElement, branches: BranchInfo[], act:
           <span class="actions">
             ${
               b.is_current
-                ? `<span class="chip head" title="Dieser Branch ist ausgecheckt">ausgecheckt</span>`
-                : `<button class="mini" data-act="checkout" data-idx="${idx}"
+                ? h`<span class="chip head" title="Dieser Branch ist ausgecheckt">ausgecheckt</span>`
+                : h`<button class="mini" data-act="checkout" data-idx="${idx}"
                      title="Diesen Branch auschecken – Zeile anklicken genügt">${icon("right", 12)} wechseln</button>`
             }
             ${
               b.is_current || act.allowMerge === false
                 ? ""
-                : `<button class="mini quiet" data-act="merge" data-idx="${idx}"
+                : h`<button class="mini quiet" data-act="merge" data-idx="${idx}"
                      title="„${esc(b.name)}“ in den aktuellen Branch mergen (nicht auschecken)">${icon("merge", 12)}</button>`
             }
-            ${!b.is_current ? `<button class="mini quiet" data-act="compare" data-idx="${idx}" title="Mit aktuellem Branch vergleichen">Diff</button>` : ""}
+            ${!b.is_current ? h`<button class="mini quiet" data-act="compare" data-idx="${idx}" title="Mit aktuellem Branch vergleichen">Diff</button>` : ""}
             <button class="mini quiet" data-act="newfrom" data-idx="${idx}"
               title="Neuen Branch von „${esc(b.name)}“ aus starten">${icon("plus", 12)}</button>
             ${
               b.is_remote
-                ? `<button class="mini quiet danger" data-act="delete-remote" data-idx="${idx}" title="Remote-Branch löschen">${icon("trash", 12)}</button>`
+                ? h`<button class="mini quiet danger" data-act="delete-remote" data-idx="${idx}" title="Remote-Branch löschen">${icon("trash", 12)}</button>`
                 : b.is_current
                   ? ""
-                  : `<button class="mini quiet danger" data-act="delete" data-idx="${idx}" title="Löschen">${icon("trash", 12)}</button>`
+                  : h`<button class="mini quiet danger" data-act="delete" data-idx="${idx}" title="Löschen">${icon("trash", 12)}</button>`
             }
           </span>
         </div>`;
     };
     const localIdx = (item: Item) => items.indexOf(item);
     list.innerHTML = `
-      ${local.length ? `<div class="group-title">Lokal (${local.length})</div>${local.map((x) => rowHtml(x, localIdx(x))).join("")}` : ""}
-      ${remote.length ? `<div class="group-title">Remote (${remote.length})</div>${remote.map((x) => rowHtml(x, localIdx(x))).join("")}` : ""}`;
+      ${local.length ? h`<div class="group-title">Lokal (${local.length})</div>${local.map((x) => rowHtml(x, localIdx(x))).join("")}` : ""}
+      ${remote.length ? h`<div class="group-title">Remote (${remote.length})</div>${remote.map((x) => rowHtml(x, localIdx(x))).join("")}` : ""}`;
   };
 
   const close = () => {
@@ -208,7 +209,7 @@ export function openBranchMenu(anchor: HTMLElement, branches: BranchInfo[], act:
       const item = items[cursor];
       if (!item) return;
       if (item.branch.is_current) {
-        toast("Dieser Branch ist bereits ausgecheckt", "info");
+        toast(t("Dieser Branch ist bereits ausgecheckt"), "info");
         return;
       }
       activate(cursor, "checkout");

@@ -1,6 +1,7 @@
 // Typisierte Brücke zum Rust-Backend. Im Browser (Designarbeit mit
 // `npm run dev:web`) übernimmt mock.ts.
 
+import {localizeText} from "./i18n";
 import { mockInvoke } from "./mock";
 
 export const inTauri =
@@ -21,7 +22,12 @@ function loader(): Promise<InvokeFn> {
 
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const invoke = await loader();
-  return invoke(cmd, args) as Promise<T>;
+  try { return await invoke(cmd, args) as T; }
+  catch (error) {
+    if(typeof error === 'string') throw localizeText(error);
+    if(error instanceof Error) throw new Error(localizeText(error.message));
+    throw error;
+  }
 }
 
 // ------------------------------------------------------------------ Typen

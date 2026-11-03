@@ -584,3 +584,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .auto-suggestion summary { cursor:pointer; color:var(--accent); font:500 11px var(--ui); padding:3px 0; }
 .auto-suggestion pre { margin:10px 0; padding:9px; background:var(--bg-1); color:var(--fg); border:1px solid var(--line-soft); border-radius:6px; font:12px/1.6 var(--mono); max-height:180px; overflow:auto; }
 .auto-suggestion > div { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; font:11px var(--ui); color:var(--fg-3); }
+
+/* Appearance and language stay together; flags have native-language text labels. */
+.sidebar-footer { display: grid; gap: 8px; }
+.language-switch { display: flex; gap: 3px; padding: 3px; background: var(--bg-3); border-radius: 9px; }
+.rail .language-switch button { flex: 1; min-width: 0; min-height: 30px; justify-content: center; padding: 5px 6px; gap: 5px; font-size: 11px; }
+.rail .language-switch button[aria-pressed="true"] { background: var(--bg-1); color: var(--fg); box-shadow: var(--shadow-sm); }
+.language-switch img { flex: none; object-fit: cover; border-radius: 2px; box-shadow: 0 0 0 1px var(--line); }
+.language-code { display: none; }
+@media (max-width: 767px) {
+  .sidebar-footer { display: flex; align-items: center; width: 100%; gap: 8px; }
+  .sidebar-footer .theme-switch, .sidebar-footer .language-switch { flex: 1; min-width: 0; width: auto; }
+  .language-name { display: none; }
+  .language-code { display: inline; }
+  .rail .language-switch button { flex-direction: row; padding: 5px; }
+}

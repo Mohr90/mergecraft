@@ -37,6 +37,8 @@ npm run test:browser
 npm run build -- --bundles deb
 ```
 
+The type check also verifies message catalogs and interpolation slots; see [localization](docs/i18n.md). Browser checks cover both languages and state preservation.
+
 `test:browser` starts a Vite server on a free local port and shuts it down afterward. `PLAYWRIGHT_MODULE` and `CHROMIUM_PATH` can select existing test tooling. `npm run test:browser:running` instead uses an already running server, with optional `MERGECRAFT_TEST_URL`.
 
 Recreate the README screenshots with synthetic data:
@@ -64,3 +66,11 @@ target/release/mergecraft /tmp/mergecraft-native-example
 ## Pull requests
 
 Keep changes focused, describe the user-visible behavior and include the checks you ran. Cover Git edge cases with a disposable real repository, and UI state changes with browser regressions. Preserve explicit confirmation for destructive operations and never silently overwrite worktree changes or local commits.
+
+Native language switching and restart persistence can be verified after building:
+
+```bash
+python3 tests/native-i18n.py target/release/mergecraft
+```
+
+This creates its own disposable conflict repository and isolated XDG profiles, and checks that language changes do not modify files, index stages or merge state.

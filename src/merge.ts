@@ -1,3 +1,4 @@
+import { t, h, m, localizeText } from "./i18n";
 // 3-Wege-Merge-Editor im Stil des WebStorm-Merge-Dialogs:
 // lokal | Ergebnis | eingehend, Konflikt für Konflikt entscheidbar.
 
@@ -30,28 +31,28 @@ export function splitLines(text: string): string[] {
   return lines;
 }
 
-const KIND_HINT: Record<string, string> = {
+const kindHints = (): Record<string, string> => ({
   unchanged: "",
-  ours_only: "nur lokal geändert",
-  theirs_only: "nur eingehend geändert",
-  both_same: "auf beiden Seiten gleich",
-  conflict: "Konflikt",
-};
+  ours_only: t("nur lokal geändert"),
+  theirs_only: t("nur eingehend geändert"),
+  both_same: t("auf beiden Seiten gleich"),
+  conflict: t("Konflikt"),
+});
 
 function labelFor(choice: Choice): string {
   switch (choice) {
     case "ours":
-      return "lokal";
+      return t("lokal");
     case "theirs":
-      return "eingehend";
+      return t("eingehend");
     case "both":
-      return "beide";
+      return t("beide");
     case "base":
-      return "Basis";
+      return t("Basis");
     case "auto":
       return "Auto Resolve";
     default:
-      return "eigene Fassung";
+      return t("eigene Fassung");
   }
 }
 
@@ -233,9 +234,26 @@ export class MergeEditor {
       if (this.rawEl) { this.rawEl.value = this.data.merged.text;this.rawBefore=this.rawEl.value; }
       this.updateDirtyState();
       const status = this.root.querySelector('.merge-foot .status');
-      if (status) status.textContent = "Vorhandene Arbeitsdatei geladen – bearbeite deine gespeicherte Fassung weiter.";
+      if (status) status.textContent = t("Vorhandene Arbeitsdatei geladen – bearbeite deine gespeicherte Fassung weiter.");
     }
     this.initial=this.snapshot();
+  }
+
+  /** Rebuild chrome from the existing editor model without reopening the file or resetting undo history. */
+  relocalize(): void {
+    if (!this.root || this.saving) return;
+    const state=this.snapshot();
+    const selections=[...this.root.querySelectorAll('textarea')].map(area=>({start:area.selectionStart,end:area.selectionEnd,scroll:area.scrollTop}));
+    const openProposals=[...this.nodes].filter(([,node])=>node.querySelector<HTMLDetailsElement>('details.auto-suggestion')?.open).map(([index])=>index);
+    this.restore(state);
+    this.root.querySelectorAll('textarea').forEach((area,index)=>{
+      const previous=selections[index];
+      if(previous){area.setSelectionRange(previous.start,previous.end);area.scrollTop=previous.scroll;}
+    });
+    for (const index of openProposals) {
+      const details=this.nodes.get(index)?.querySelector<HTMLDetailsElement>('details.auto-suggestion');
+      if(details)details.open=true;
+    }
   }
 
   private snapshot(rawText?:string):EditorSnapshot {return {res:new Map(this.res),raw:this.rawMode,text:rawText??this.rawEl?.value??"",current:this.current};}
@@ -263,9 +281,9 @@ export class MergeEditor {
   }
   private async resetPreview() {
     const data=this.data;
-    if(!await confirmDialog("Auswahl dieser Datei zurücksetzen?","Setzt die Vorschau auf den beim Öffnen geladenen Stand zurück. Die Datei wird erst beim Speichern geändert.","Auswahl zurücksetzen"))return;
+    if(!await confirmDialog(t("Auswahl dieser Datei zurücksetzen?"),t("Setzt die Vorschau auf den beim Öffnen geladenen Stand zurück. Die Datei wird erst beim Speichern geändert."),t("Auswahl zurücksetzen")))return;
     if(this.data!==data||this.saving)return;
-    this.checkpoint("Auswahl zurücksetzen");this.restore(this.initial);
+    this.checkpoint(t("Auswahl zurücksetzen"));this.restore(this.initial);
   }
 
   private build(): HTMLElement {
@@ -275,7 +293,7 @@ export class MergeEditor {
     // Kopfzeile
     const head = el("div", "merge-head");
     const dot = d.ours_label ? "" : "";
-    head.innerHTML = `
+    head.innerHTML = h`
       <div class="file">
         <span class="name">${esc(baseName(d.path))}</span>
         <span class="dir">${esc(dirName(d.path))}</span>
@@ -291,14 +309,14 @@ export class MergeEditor {
         <button class="icon-btn" data-act="undo" title="Rückgängig (Strg+Z)" aria-label="Rückgängig">${icon("undo",15)}</button>
         <button class="icon-btn" data-act="redo" title="Wiederholen (Strg+Umschalt+Z)" aria-label="Wiederholen"><span style="transform:scaleX(-1)">${icon("undo",15)}</span></button>
         <button class="btn ghost" data-act="reset-preview" title="Nur die Vorschau dieser Datei zurücksetzen">Auswahl zurücksetzen</button>
-        ${this.host.canAbort?.() ? '<button class="btn danger" data-act="abort-merge">Merge abbrechen</button>' : ""}
+        ${this.host.canAbort?.() ? h`<button class="btn danger" data-act="abort-merge">Merge abbrechen</button>` : ""}
         <button class="btn" data-act="auto-resolve" title="Getrennte Änderungen über mehrere Bereiche kombinieren. Überschneidungen bleiben offen. Ergebnis bitte prüfen.">Auto Resolve</button>
         <button class="btn ghost" data-act="accept-ours-all" title="Nur noch offene Konflikte von links übernehmen; vorhandene Entscheidungen bleiben erhalten.">Offene von links</button>
         <button class="btn ghost" data-act="accept-theirs-all" title="Nur noch offene Konflikte von rechts übernehmen; vorhandene Entscheidungen bleiben erhalten.">Offene von rechts</button>
         <button class="btn ghost" data-act="raw" title="Die ganze Ergebnisdatei direkt bearbeiten">Roh-Modus</button>
         ${
           this.siblings.length > 1
-            ? `<select class="file-select mono" data-act="switch" title="Andere Konfliktdatei">${this.siblings
+            ? h`<select class="file-select mono" data-act="switch" title="Andere Konfliktdatei">${this.siblings
                 .map(
                   (s) =>
                     `<option value="${esc(s.path)}"${s.path === d.path ? " selected" : ""}>${esc(
@@ -313,10 +331,10 @@ export class MergeEditor {
     wrap.appendChild(head);
     if (d.ours.binary || d.theirs.binary || !d.ours.exists || !d.theirs.exists) {
       head.querySelectorAll('[data-act="undo"], [data-act="redo"], [data-act="reset-preview"], [data-act="raw"], [data-act="auto-resolve"], [data-act^="accept-"], .nav').forEach(n=>n.remove());
-      const binary = el("div", "empty binary-choice", `<h2>${d.ours.binary || d.theirs.binary ? "Binärdatei" : "Datei auf einer Seite gelöscht"}</h2>
+      const binary = el("div", "empty binary-choice", h`<h2>${d.ours.binary || d.theirs.binary ? t("Binärdatei") : t("Datei auf einer Seite gelöscht")}</h2>
         <p>Wähle die vollständige Datei oder bestätige die Löschung. Die gewählte Seite wird unverändert übernommen und als gelöst markiert.</p>
-        <div class="row-actions-gap"><button class="btn" data-act="whole-ours">${d.ours.exists ? `Lokale Datei übernehmen (${esc(d.ours_label)})` : "Lokale Löschung übernehmen"}</button>
-        <button class="btn primary" data-act="whole-theirs">${d.theirs.exists ? `Eingehende Datei übernehmen (${esc(d.theirs_label)})` : "Eingehende Löschung übernehmen"}</button></div>`);
+        <div class="row-actions-gap"><button class="btn" data-act="whole-ours">${d.ours.exists ? m`Lokale Datei übernehmen (${esc(d.ours_label)})` : t("Lokale Löschung übernehmen")}</button>
+        <button class="btn primary" data-act="whole-theirs">${d.theirs.exists ? m`Eingehende Datei übernehmen (${esc(d.theirs_label)})` : t("Eingehende Löschung übernehmen")}</button></div>`);
       wrap.appendChild(binary);
       wrap.addEventListener("click", e => this.onClick(e));
       return wrap;
@@ -328,7 +346,7 @@ export class MergeEditor {
         el(
           "div",
           "banner warn",
-          `${icon("warning", 14)}<span><b>Prüfmodus:</b> <code>git merge-file</code> sieht hier einen Konflikt, die automatische Analyse nicht
+          h`${icon("warning", 14)}<span><b>Prüfmodus:</b> <code>git merge-file</code> sieht hier einen Konflikt, die automatische Analyse nicht
            (das passiert bei doppelten Zeilen). Deshalb wird kein Bereich stillschweigend übernommen – entscheide jeden geänderten Bereich selbst.</span>`,
         ),
       );
@@ -338,18 +356,18 @@ export class MergeEditor {
         el(
           "div",
           "banner warn",
-          `${icon("warning", 14)}<span><b>Binärdatei:</b> kein Textvergleich möglich – nimm links oder rechts komplett an.</span>`,
+          h`${icon("warning", 14)}<span><b>Binärdatei:</b> kein Textvergleich möglich – nimm links oder rechts komplett an.</span>`,
         ),
       );
     }
 
     const progress=el("div","merge-progress",'<span></span>');
-    progress.setAttribute("role","progressbar");progress.setAttribute("aria-label","Konflikte aufgelöst");wrap.appendChild(progress);
+    progress.setAttribute("role","progressbar");progress.setAttribute("aria-label",t("Konflikte aufgelöst"));wrap.appendChild(progress);
 
     // Spaltenköpfe + Raster
     const panes = el("div", "panes");
     const heads = el("div", "pane-heads");
-    heads.innerHTML = `
+    heads.innerHTML = h`
       <div class="ph"><span class="dot ours"></span><b>Links · Lokal</b><span class="ref">${esc(d.ours_label)}</span>
         <span class="fname mono">${esc(baseName(d.path))}</span></div>
       <div class="ph"><span class="dot result"></span><b>Ergebnis</b><span class="sub">wird geschrieben</span></div>
@@ -368,7 +386,7 @@ export class MergeEditor {
 
     // Fußzeile
     const foot = el("div", "merge-foot");
-    foot.innerHTML = `
+    foot.innerHTML = h`
       <span class="status"></span><span class="edit-state" aria-live="polite"></span>
       <span class="right-actions">
         <span class="hint muted small nowrap">Alt+↑/↓ Konflikt · Alt+←/→ übernehmen · Alt+B beide · Alt+Enter speichern</span>
@@ -401,20 +419,20 @@ export class MergeEditor {
       const res = this.res.get(i);
       const block = el("div", `cf${res ? " resolved" : ""}`);
       const bar = el("div", "cf-bar");
-      bar.innerHTML = `
+      bar.innerHTML = h`
         <span class="label${this.data.guarded && r.kind !== "conflict" ? " pruefen" : ""}">${
-          res ? "Gelöst" : this.data.guarded && r.kind !== "conflict" ? "prüfen" : "Konflikt"
+          res ? t("Gelöst") : this.data.guarded && r.kind !== "conflict" ? t("prüfen") : t("Konflikt")
         }</span>
         <button class="mini" data-act="take-ours" title="Links übernehmen: lokale Fassung (Alt+←)">${icon("right", 12)} Links übernehmen</button>
         <button class="mini" data-act="take-theirs" title="Rechts übernehmen: eingehende Fassung (Alt+→)">${icon("left", 12)} Rechts übernehmen</button>
         <button class="mini" data-act="take-both" title="Beide Fassungen übernehmen">${icon("both", 12)} Beide</button>
         <button class="mini" data-act="revert" title="Entscheidung zurücknehmen">${icon("undo", 12)}</button>
         <span class="state ${res ? "ok" : "open"}">${
-          res ? `✓ ${labelFor(res.choice)}` : "offen"
+          res ? `✓ ${labelFor(res.choice)}` : t("offen")
         }</span>`;
       block.appendChild(bar);
       const area = el("textarea", "cf-edit");
-      area.setAttribute("aria-label", `Ergebnis für Konfliktbereich ${i + 1}`);
+      area.setAttribute("aria-label", m`Ergebnis für Konfliktbereich ${i + 1}`);
       area.spellcheck = false;
       area.dataset.region = String(i);
       area.rows = Math.max(1, this.shownResultLines(r, i).length);
@@ -422,7 +440,7 @@ export class MergeEditor {
       block.appendChild(area);
       const proposal=res ? null : this.autoCandidate(i);
       if(proposal!==null) {
-        block.insertAdjacentHTML("beforeend",`<details class="auto-suggestion"><summary>Automatischen Vorschlag ansehen</summary><pre>${esc(proposal.join("\n")||"(leeres Ergebnis)")}</pre><div><span>Noch nicht übernommen</span><button class="mini primary" data-act="auto-region">Vorschlag übernehmen</button></div></details>`);
+        block.insertAdjacentHTML("beforeend",h`<details class="auto-suggestion"><summary>Automatischen Vorschlag ansehen</summary><pre>${esc(proposal.join("\n")||t("(leeres Ergebnis)"))}</pre><div><span>Noch nicht übernommen</span><button class="mini primary" data-act="auto-region">Vorschlag übernehmen</button></div></details>`);
       }
       resultCol.appendChild(block);
     } else {
@@ -430,14 +448,14 @@ export class MergeEditor {
       const origin = r.kind === "theirs_only" ? "theirs" : "ours";
       const chip =
         lines.length > 0 && r.kind !== "unchanged"
-          ? `<span class="taken ${origin}">${origin === "theirs" ? "← eingehend" : "lokal →"}</span>`
+          ? `<span class="taken ${origin}">${origin === "theirs" ? t("← eingehend") : t("lokal →")}</span>`
           : "";
       lines.forEach((line, k) => {
         const ln = el("div", "line");
         ln.innerHTML = `<span class="txt">${esc(line)}</span>${k === 0 ? chip : ""}`;
         if (r.kind === "ours_only" || r.kind === "both_same") ln.classList.add("from-ours");
         if (r.kind === "theirs_only") ln.classList.add("from-theirs");
-        if (KIND_HINT[r.kind]) ln.title = KIND_HINT[r.kind];
+        if (kindHints()[r.kind]) ln.title = kindHints()[r.kind];
         resultCol.appendChild(ln);
       });
       if (lines.length === 0) resultCol.appendChild(el("div", "line line-empty"));
@@ -496,19 +514,19 @@ export class MergeEditor {
     const stats = wrap.querySelector(".merge-head .stats");
     if (stats) {
       stats.innerHTML = `
-        ${conflicts.length ? `<span class="badge conflict">${conflicts.length} Konflikt${conflicts.length === 1 ? "" : "e"}</span>` : ""}
-        ${auto ? `<span class="badge">${auto} automatisch</span>` : ""}
+        ${conflicts.length ? h`<span class="badge conflict">${conflicts.length} ${conflicts.length === 1 ? t("Konflikt") : t("Konflikte")}</span>` : ""}
+        ${auto ? h`<span class="badge">${auto} automatisch</span>` : ""}
         ${
           conflicts.length
-            ? `<span class="badge ${open.length ? "open" : "done"}">${conflicts.length - open.length} von ${conflicts.length} aufgelöst</span>`
-            : `<span class="badge done">keine Konflikte</span>`
+            ? h`<span class="badge ${open.length ? "open" : "done"}">${conflicts.length - open.length} von ${conflicts.length} aufgelöst</span>`
+            : h`<span class="badge done">keine Konflikte</span>`
         }`;
     }
     const progress=wrap.querySelector<HTMLElement>(".merge-progress");
     if(progress) {
       progress.setAttribute("aria-valuemin","0");progress.setAttribute("aria-valuemax",String(conflicts.length||1));
       progress.setAttribute("aria-valuenow",String(conflicts.length ? conflicts.length-open.length : 1));
-      progress.setAttribute("aria-valuetext",`${conflicts.length-open.length} von ${conflicts.length} aufgelöst`);
+      progress.setAttribute("aria-valuetext",m`${conflicts.length-open.length} von ${conflicts.length} aufgelöst`);
       progress.style.setProperty("--merge-complete",`${conflicts.length ? (conflicts.length-open.length)/conflicts.length*100 : 100}%`);
       progress.dataset.complete=String(!open.length);
     }
@@ -516,7 +534,7 @@ export class MergeEditor {
     this.updateDirtyState();
     for(const [act,stack] of [["undo",this.past],["redo",this.future]] as const){
       const button=wrap.querySelector<HTMLButtonElement>(`[data-act="${act}"]`);
-      if(button){button.disabled=this.saving||!stack.length;button.title=`${act==="undo"?"Rückgängig":"Wiederholen"}${stack.length?": "+stack[stack.length-1].label:""}`;}
+      if(button){button.disabled=this.saving||!stack.length;button.title=`${act==="undo"?t("Rückgängig"):t("Wiederholen")}${stack.length?": "+localizeText(stack[stack.length-1].label):""}`;}
     }
     wrap.querySelectorAll<HTMLButtonElement>('[data-act="reset-preview"],[data-act="abort-merge"]').forEach(button=>button.disabled=this.saving);
     const select=wrap.querySelector<HTMLSelectElement>(".file-select");if(select)select.disabled=this.saving;
@@ -537,11 +555,11 @@ export class MergeEditor {
       const done = total - open.length;
       status.textContent = open.length
         ? open.length === 1
-          ? "1 Bereich braucht noch eine Entscheidung"
-          : `${open.length} Bereiche brauchen noch eine Entscheidung`
+          ? t("1 Bereich braucht noch eine Entscheidung")
+          : m`${open.length} Bereiche brauchen noch eine Entscheidung`
         : total
-          ? `${total === 1 ? "Konflikt" : `Alle ${total} Konflikte`} aufgelöst`
-          : "keine Konflikte – nur bestätigen";
+          ? m`${total === 1 ? t("Konflikt") : m`Alle ${total} Konflikte`} aufgelöst`
+          : t("keine Konflikte – nur bestätigen");
       status.className = `status ${open.length ? "warn" : "ok"}`;
       void done;
     }
@@ -578,7 +596,7 @@ export class MergeEditor {
     const rect = anchor.getBoundingClientRect();
     pop.style.left = `${Math.max(8, Math.min(rect.left - 60, window.innerWidth - 540))}px`;
     pop.style.top = `${rect.bottom + 6}px`;
-    pop.innerHTML = `
+    pop.innerHTML = h`
       <div class="group-title">Konflikte in ${esc(baseName(this.data.path))}</div>
       <div class="list">${list
         .map((idx, n) => {
@@ -621,19 +639,19 @@ export class MergeEditor {
   private updateDirtyState() {
     this.touched=(this.rawMode ? this.rawEl?.value??this.resultText() : this.resultText())!==this.savedText;
     const label=this.root?.querySelector<HTMLElement>(".edit-state");
-    if(label) { label.textContent=this.saving ? "Wird gespeichert …" : this.touched ? "Nicht gespeichert" : "";label.classList.toggle("saving",this.saving); }
+    if(label) { label.textContent=this.saving ? t("Wird gespeichert …") : this.touched ? t("Nicht gespeichert") : "";label.classList.toggle("saving",this.saving); }
   }
 
   private applyDecisions(decisions:{index:number;choice:Choice;lines?:string[]}[]) {
     if(!decisions.length) return;
-    this.checkpoint(decisions[0].choice==="auto"?"Auto Resolve":"Offene Konflikte übernehmen");
+    this.checkpoint(decisions[0].choice==="auto"?"Auto Resolve":t("Offene Konflikte übernehmen"));
     this.touched=true;
     for(const decision of decisions) { this.res.set(decision.index,{choice:decision.choice,text:decision.lines});this.updateRegion(decision.index); }
     this.updateHeader();
   }
 
   private decide(i: number, choice: Choice, text?: string[]) {
-    this.checkpoint(`Bereich ${i+1}: ${labelFor(choice)}`);
+    this.checkpoint(m`Bereich ${i+1}: ${labelFor(choice)}`);
     this.touched = true;
     this.res.set(i, { choice, text });
     this.updateRegion(i);
@@ -701,7 +719,7 @@ export class MergeEditor {
         this.decide(idx, "both");
         break;
       case "revert":
-        this.checkpoint("Bereich zurücksetzen");
+        this.checkpoint(t("Bereich zurücksetzen"));
         this.touched = true;
         this.res.delete(idx);
         this.updateRegion(idx);
@@ -752,7 +770,7 @@ export class MergeEditor {
       area.addEventListener("input", () => {
         const idx = Number(area.dataset.region);
         const lines = area.value.split("\n");
-        this.checkpoint("Text bearbeiten",`block-${idx}`);
+        this.checkpoint(t("Text bearbeiten"),`block-${idx}`);
         this.touched = true;
         this.res.set(idx, { choice: "custom", text: lines });
         area.rows = Math.max(1, lines.length);
@@ -763,7 +781,7 @@ export class MergeEditor {
           region.querySelector(".cf")?.classList.add("resolved");
           const state = region.querySelector(".cf-bar .state");
           if (state) {
-            state.textContent = "✓ eigene Fassung";
+            state.textContent = t("✓ eigene Fassung");
             state.className = "state ok";
           }
         }
@@ -779,14 +797,14 @@ export class MergeEditor {
     if (!this.rawMode) {
       this.rawMode = true;
       btn.classList.add("active");
-      btn.textContent = "Block-Ansicht";
+      btn.textContent = t("Block-Ansicht");
       const area = el("textarea", "raw-edit");
       area.spellcheck = false;
-      area.setAttribute("aria-label", "Ergebnisdatei frei bearbeiten");
+      area.setAttribute("aria-label", t("Ergebnisdatei frei bearbeiten"));
       area.value = this.resultText();
       this.rawBefore=area.value;
       area.addEventListener("input", () => {
-        this.checkpoint("Ergebnis bearbeiten","raw",this.rawBefore);this.rawBefore=area.value;
+        this.checkpoint(t("Ergebnis bearbeiten"),"raw",this.rawBefore);this.rawBefore=area.value;
         this.touched = true;
         this.updateHeader();
       });
@@ -796,12 +814,12 @@ export class MergeEditor {
       grid.appendChild(area);
     } else {
       if (this.rawEl && this.rawEl.value !== this.resultText()) {
-        this.host.onError("Die freie Fassung bleibt im Textmodus erhalten. Speichere sie hier; die Block-Ansicht kann freien Text nicht verlustfrei zuordnen.");
+        this.host.onError(t("Die freie Fassung bleibt im Textmodus erhalten. Speichere sie hier; die Block-Ansicht kann freien Text nicht verlustfrei zuordnen."));
         return;
       }
       this.rawMode = false;
       btn.classList.remove("active");
-      btn.textContent = "Roh-Modus";
+      btn.textContent = t("Roh-Modus");
       this.rawEl = null;
       grid.classList.remove("raw");
       grid.innerHTML = "";
@@ -830,11 +848,11 @@ export class MergeEditor {
 
   private async doSave(markResolved: boolean) {
     if (this.saving) return;
-    if (this.data.ours.binary || this.data.theirs.binary) { this.host.onError("Bitte eine vollständige Dateiseite übernehmen."); return; }
+    if (this.data.ours.binary || this.data.theirs.binary) { this.host.onError(t("Bitte eine vollständige Dateiseite übernehmen.")); return; }
     if (this.rawMode && this.rawEl) {
       const text = this.rawEl.value;
       const hasMarkers = /^(<{7}|={7}|>{7}|\|{7})/m.test(text);
-      if (markResolved && hasMarkers) { this.host.onError("Entferne zuerst alle Konfliktmarker oder speichere die Datei als Zwischenstand."); return; }
+      if (markResolved && hasMarkers) { this.host.onError(t("Entferne zuerst alle Konfliktmarker oder speichere die Datei als Zwischenstand.")); return; }
       const r = await this.saveOnce(text, markResolved && !hasMarkers);
       if (r.ok) {
         this.savedText=text;this.typingKey="";
@@ -847,12 +865,12 @@ export class MergeEditor {
     const open = this.openRegions();
     if (markResolved && open.length) {
       this.host.onError(
-        `${open.length} Bereich${open.length === 1 ? "" : "e"} noch offen. Wähle links, rechts oder bearbeite das Ergebnis.`,
+        m`${open.length} ${open.length === 1 ? t("Bereich") : t("Bereiche")} noch offen. Wähle links, rechts oder bearbeite das Ergebnis.`,
       );
       return;
     }
     const result=this.resultText();
-    if(markResolved && /^(<{7}|={7}|>{7}|\|{7})/m.test(result)) { this.host.onError("Entferne zuerst alle Konfliktmarker aus dem Ergebnis."); return; }
+    if(markResolved && /^(<{7}|={7}|>{7}|\|{7})/m.test(result)) { this.host.onError(t("Entferne zuerst alle Konfliktmarker aus dem Ergebnis.")); return; }
     const r = await this.saveOnce(result, markResolved);
     if (r.ok) {
       this.savedText=result;this.typingKey="";

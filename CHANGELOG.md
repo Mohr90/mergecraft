@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- German/English language controls with flags and native language names beside the appearance switch.
+- Local language preference, system-language detection, translated dialogs, accessibility labels, tooltips and locale-aware dates.
+- Language switching preserves commit drafts, staging, filters, comparisons and unsaved merge decisions/text/undo history.
+- Translation catalog and interpolation checks, plus English/German browser workflows.
+
 ## 0.2.0 — 2026-11-03
 
 First public release of Mergecraft for Linux.
