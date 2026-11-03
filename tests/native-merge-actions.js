@@ -1,0 +1,36 @@
+(async()=>{
+ const invoke=window.__TAURI__.core.invoke,app=window.mergecraft,notes=[];
+ const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+ const assert=(ok,message)=>{if(!ok)throw new Error(message);};
+ const until=async fn=>{for(let i=0;i<160;i++){if(await fn())return;await wait(75);}throw new Error('Timeout '+fn);};
+ const click=selector=>{const node=document.querySelector(selector);assert(node,'Missing '+selector);node.click();};
+ const open=async path=>{await until(()=>!app.mergeEditor.isSaving());await app.openMerge(path);await until(()=>document.querySelector('.merge-head .name')?.textContent===path);};
+ const saved=async path=>{click('[data-act="save-resolve"]');await until(async()=>!(await invoke('status')).conflicts.some(e=>e.path===path));};
+ const content=async(path)=>{const d=await invoke('file_diff',{rev_a:'HEAD',rev_b:'WORK',path,label_a:null,label_b:null});return d.b_text;};
+ try {
+  await until(()=>document.querySelector('.branches-panel'));
+  const initial=await invoke('status');assert(initial.conflicts.length===8,'fixture must contain 8 Git conflicts');
+  await open('auto.txt');assert(!document.querySelector('[data-act="auto-resolve"]').disabled,'simple intraline merge not available');
+  click('[data-act="auto-resolve"]');assert(app.mergeEditor.resultText()==='let x = 10; let y = 20;\n','auto preview wrong');
+  assert((await invoke('status')).conflicts.some(e=>e.path==='auto.txt'),'auto resolved on disk before review');
+  await saved('auto.txt');assert(await content('auto.txt')==='let x = 10; let y = 20;\n','auto save wrong');notes.push('PASS Auto Resolve previews separate same-line changes and saves only on confirmation');
+  for(const [path,action,expected] of [['left.txt','take-ours','local\n'],['right.txt','take-theirs','incoming\n'],['both.txt','take-both','local\nincoming\n'],['tail.txt','take-theirs','incoming']]){
+   await open(path);click('[data-act="'+action+'"]');await saved(path);assert(await content(path)===expected,path+' content mismatch');
+  }
+  notes.push('PASS Accept Left, Accept Right, Both, and missing final newline preserve expected text');
+  await open('overlap.txt');assert(document.querySelector('[data-act="auto-resolve"]').disabled,'overlap guessed automatically');
+  click('[data-act="save-resolve"]');await wait(150);assert((await invoke('status')).conflicts.some(e=>e.path==='overlap.txt'),'unresolved conflict marked resolved');
+  click('[data-act="take-theirs"]');await saved('overlap.txt');notes.push('PASS overlapping edits stay manual; unresolved save is blocked');
+  for(const [path,action] of [['removed.txt','whole-ours'],['binary.dat','whole-theirs']]){
+   await open(path);click('[data-act="'+action+'"]');await until(()=>document.querySelector('dialog[open]'));click('dialog [data-i="1"]');
+   await until(async()=>!(await invoke('status')).conflicts.some(e=>e.path===path));
+  }
+  const removed=await invoke('file_diff',{rev_a:'HEAD',rev_b:'WORK',path:'removed.txt',label_a:null,label_b:null});assert(removed.b_missing,'chosen deletion restored the file');
+  const bytes=await invoke('git_raw',{args:['hash-object','binary.dat']});const theirs=await invoke('git_raw',{args:['rev-parse','incoming:binary.dat']});assert(bytes.stdout===theirs.stdout,'binary bytes corrupted');
+  assert(await content('clean.txt')==='local\nmiddle\nincoming\n','nonconflicting edits lost');assert(await content('notes.txt')==='leave me alone\n','unrelated worktree changed');
+  notes.push('PASS modify/delete choice, binary bytes, automatic nonconflicting edits and unrelated worktree preserved');
+  assert((await invoke('status')).conflicts.length===0,'conflicts remain');await invoke('merge_continue');assert(!(await invoke('snapshot')).merging,'merge not finalized');
+  notes.push('PASS merge completed with all 8 original conflicts resolved');
+ }catch(e){notes.push('FAIL '+(e.stack||e));}
+ await invoke('selftest_report',{text:notes.join('\n')});
+})();

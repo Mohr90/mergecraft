@@ -1,188 +1,129 @@
-# Mergecraft
+<p align="center">
+  <img src="src-tauri/icons/128x128.png" width="72" height="72" alt="Mergecraft icon">
+</p>
 
-Git-Client für Linux mit einem **3-Wege-Merge-Editor im Stil des WebStorm-Merge-Dialogs**.
-Rust (Tauri v2) im Hintergrund, Oberfläche in TypeScript, Git über die echte `git`-CLI.
+<h1 align="center">Mergecraft</h1>
+<p align="center">A focused Git desktop client for Linux.<br>Review changes, navigate branches, and resolve merge conflicts in one calm workspace.</p>
 
-## Der Merge-Editor
+<p align="center">
+  <a href="https://github.com/Mohr90/mergecraft/actions/workflows/ci.yml"><img src="https://github.com/Mohr90/mergecraft/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/platform-Linux-333333" alt="Linux">
+  <img src="https://img.shields.io/badge/built_with-Rust_%2B_Tauri_%2B_TypeScript-0066cc" alt="Built with Rust, Tauri and TypeScript">
+</p>
 
-```
- Kopfzeile   main.rs  src/   1 Konflikt · 4 automatisch · 0 von 1 aufgelöst
-             ⌃  1/1 ⌄   Alle von lokal   Alle von eingehend   Roh-Modus
- ┌──────────────────┬────────────────────────────┬──────────────────┐
- │ Lokal (main)     │ Ergebnis (wird geschrieben)│ Eingehend (feat) │
- │ 1 use std::…     │ 1 use std::…               │ 1 use std::…     │
- │ 2 use std::fs;   │ 2 use std::fs;     lokal → │ 2 use std::fs;   │
- │ ╔══════════════╗ │ ╔════════════════════════╗ │ ╔══════════════╗ │
- │ ║ 7 map.insert ║ │ ║ KONFLIKT ◀ ▶ ⇄ ↺  offen║ │ ║ 6 map.insert ║ │
- │ ╚══════════════╝ │ ║  (editierbarer Text)   ║ │ ╚══════════════╝ │
- │ 8 println!…      │ 8 println!…                │ 7 println!…      │
- └──────────────────┴────────────────────────────┴──────────────────┘
- Fußzeile   1 Bereich braucht noch eine Entscheidung     [Speichern] [Speichern & als gelöst]
-```
+<p align="center">
+  <a href="https://github.com/Mohr90/mergecraft/releases">Downloads</a> ·
+  <a href="docs/guide.de.md">Deutsche Anleitung</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a> ·
+  <a href="https://github.com/Mohr90/mergecraft/issues">Report a bug</a>
+</p>
 
-* Konfliktbereich öffnen: **jeder** Bereich wird einzeln entschieden –
-  `◀` lokal, `▶` eingehend, `⇄` beide, `↺` zurücknehmen, oder den Text im
-  Ergebnisbereich direkt editieren („eigene Fassung“).
-* **Wortweise Hervorhebung** innerhalb geänderter Zeilen (wie im WebStorm-Diff):
-  nur die tatsächlich geänderten Wörter sind markiert.
-* Automatisch übernommene Bereiche sind gekennzeichnet (`lokal →`, `← eingehend`,
-  grün/blau eingefärbt), damit man sieht, was ohne Zutun passiert ist.
-* **Konflikt-Navigation**: `Alt+↑`/`Alt+↓` springt zum nächsten offenen Bereich,
-  die Positionsanzeige öffnet eine Liste aller Konflikte mit Zeilennummer und Vorschau.
-* **Roh-Modus**: die ganze Ergebnisdatei als Texteditor.
-* **Speichern** schreibt die Datei; **Speichern & als gelöst markieren** macht
-  zusätzlich `git add`. Offene Bereiche werden als git-Konfliktmarker geschrieben –
-  es kann nichts verloren gehen.
-* **Prüfmodus (Wächter)**: meldet `git merge-file` einen Konflikt, den die
-  automatische Analyse nicht sieht (passiert bei doppelten Zeilen), wird kein
-  Bereich stillschweigend übernommen – die Oberfläche verlangt für jeden
-  geänderten Bereich eine Entscheidung.
-* Binärdateien werden erkannt; dort nimmt man eine Seite komplett an.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/mergecraft-apple-dark.png">
+  <img src="docs/screenshots/mergecraft-apple-light.png" alt="Mergecraft branch workspace in light appearance, with local and remote branches, search and synchronization status">
+</picture>
 
-## Erststart
+## Your repository, clearly organized
 
-Ohne Argument zeigt Mergecraft die Willkommensseite: Pfad eintippen (oder Ordner
-wählen), Liste der zuletzt geöffneten Repositories, und – falls der Ordner noch
-kein Repository ist – eine Schaltfläche **„Repository hier anlegen“** (`git init
--b main`). Wurde schon einmal ein Repository geöffnet, startet die App direkt
-damit.
-
-## Tastenkürzel
-
-| Kürzel | Wirkung |
+| Workspace | What you can do |
 | --- | --- |
-| `Strg+R`, `F5` | Aktualisieren |
-| `Strg+1` … `Strg+4` | Änderungen / Branches / Historie / Konsole |
-| `Strg+P` | Branch-Suche öffnen |
-| `Alt+↑` / `Alt+↓` | vorheriger / nächster Konflikt im Merge-Editor |
-| `Alt+←` / `Alt+→` / `Alt+B` | lokale / eingehende / beide Fassung übernehmen |
-| `Alt+Enter` | speichern und als gelöst markieren |
-| `Strg+Enter` | Commit aus dem Nachrichtenfeld |
-| `Esc` | Popover, Rückfrage oder Editor schließen |
+| **Changes** | Review inline diffs, select files with staging checkboxes, create commits, amend the last commit, or roll back selected tracked files to HEAD. |
+| **Branches** | Search, filter and sort favorites, local branches and remote branches. Create, switch, compare and merge branches. |
+| **Merge editor** | Compare local, result and incoming text side by side. Accept either side or both, review automatic proposals, edit the result, and undo decisions. |
+| **Tags & history** | Browse tags and commits, inspect changed files, compare revisions and follow a file's history. |
+| **Remotes** | Fetch, pull and push using your existing Git configuration and credential helpers. See unpublished commits and incoming changes. |
 
-Ungespeicherte Änderungen im Merge-Editor gehen nicht verloren: beim Wechsel des
-Bereichs, des Konflikts oder beim Schließen fragt Mergecraft nach.
+The interface is currently in **German**, with light and dark appearances and keyboard shortcuts. Mergecraft uses the real Git CLI, so it works with GitHub, GitLab and other Git remotes. It does not require a hosting-service API token and does not provide a built-in merge-request or pipeline dashboard.
 
-## Branches suchen, wechseln, anlegen, mergen
+## Resolve conflicts with context
 
-* Branch-Chip in der Kopfzeile öffnet ein Popover mit **Suchfeld** (unscharfe
-  Suche über Namen, zusätzlich Treffer in der Commit-Nachricht), gruppiert nach
-  Lokal/Remote, mit Upstream, Voraus-/Zurück-Zählern, letztem Commit und Datum.
-  Treffer werden in der Liste hervorgehoben.
-* Tastatur: `↑`/`↓` wählen, `Enter` wechseln (Remote-Branches werden als
-  lokaler Tracking-Branch angelegt), `Esc` schließen.
-* Aktionen je Branch: wechseln, **mergen** (in den aktuellen Branch, `--no-ff`
-  umschaltbar oder Fast-forward), neuen Branch hier starten, umbenennen, löschen
-  (lokal und remote).
-* Läuft ein Merge, zeigt die Kopfzeile das an, mit „Merge abbrechen“ /
-  „Merge abschließen“ und dem direkten Sprung in die Konflikte.
+![Three-way conflict editor with local and incoming source panes and an editable result](docs/screenshots/mergecraft-merge.png)
 
-## Arbeitskopie, Historie, Diffs, Remote
+- **Accept local, incoming, or both** for an individual conflict; bulk actions preserve existing decisions.
+- **Auto Resolve** proposes compatible edits, including simple independent changes within a line or across multiple lines. Review each proposal before accepting it; overlapping and ambiguous edits stay manual.
+- **Undo / redo** decisions and text edits, or reset the current file's preview.
+- **Save** writes the result. **Save and mark resolved** also stages it. Unresolved conflict markers prevent marking a file resolved.
+- **Abort merge** uses `git merge --abort` for the running merge, including previously saved conflict resolutions. It does not rewrite completed merge commits. Git may be unable to reconstruct the original state if local changes existed before the merge.
+- Binary and non-UTF-8 files are handled as whole-side choices. Modify/delete conflicts also support deletion.
 
-* Gruppen Konflikte / Gestaged / Änderungen / Unversioniert mit Aktionen je
-  Datei (auflösen, lokal bzw. eingehend komplett nehmen, Diff, stagen, unstagen,
-  verwerfen) und Sammelaktionen.
-* Commit-Box mit `-a`, `--amend`, `-S` und den letzten Commit-Nachrichten zur
-  Auswahl.
-* Historie mit Ref-Chips (HEAD, Branch, Remote, Tag), Autor und relativem Datum;
-  geänderte Dateien je Commit, Diff per Klick.
-* Diff-Ansicht **nebeneinander** oder **vereint**, mit Zeilennummern,
-  `+/−`-Statistik und wortweiser Hervorhebung.
-* Fetch (`--all --prune`), Pull, Push, Git-Konsole für rohe Befehle,
-  Statuszeile mit Branch-, Zähler- und Kopf-Commit-Information.
+## Review before you commit
 
-## Starten
+![Changes workspace with staging checkboxes and inline diff preview](docs/screenshots/mergecraft-preview.png)
+
+A new commit needs staged files. Missing selections are explained beside the commit controls. **Amend** remains an explicit option. Commit drafts survive refreshes and navigation and clear only after a successful commit.
+
+Remote checkout also has an explicit choice when a local branch already exists: open its current state, or fast-forward it to the remote state. Automatic updates require a clean worktree and preserve local commits. Pull can offer to connect a unique same-name remote when tracking has not been configured.
+
+Synchronization indicators compare commits against the **last fetched remote references**; use Fetch to refresh them. Uncommitted changes are separate from this status. Local merges into `main` and `master` are intentionally hidden in the GUI; the intended workflow uses a merge/pull request on the hosting service. Merging `master` into a checked-out feature branch is supported.
+
+## Install on Linux
+
+Mergecraft currently targets Linux with GTK 3 and WebKitGTK 4.1. Windows and macOS builds are not currently supported by the native implementation.
+
+Download the `.deb` package from [Releases](https://github.com/Mohr90/mergecraft/releases), then install it on a compatible Debian/Ubuntu system:
 
 ```bash
-cd ~/develop/mergecraft
-
-npm run dev          # Entwicklung (Vite + Tauri-Fenster)
-npm run dev:web      # nur Oberfläche im Browser, mit Demo-Daten
-npm run build        # Release + Pakete (target/release/bundle/{deb,appimage})
-bash packaging/install.sh   # für den eigenen Benutzer installieren (~/.local)
-mergecraft /pfad/zum/repo   # Repo direkt öffnen
+sudo apt install ./Mergecraft_0.2.0_amd64.deb
+mergecraft /path/to/repository
 ```
 
-## Als externes Merge-Tool (gitconfig bleibt unverändert)
+Or build from source and install for your user without `sudo`:
 
 ```bash
-mergecraft --merge <lokal> <basis> <eingehend> <ergebnis> [label-lokal] [label-eingehend]
+git clone https://github.com/Mohr90/mergecraft.git
+cd mergecraft
+npm ci
+npm run build -- --bundles deb
+bash packaging/install.sh
 ```
 
-Zum Einhängen später:
+See [development prerequisites and tests](CONTRIBUTING.md) before building. The native app requires Git in `PATH` and uses your existing SSH keys or Git credential helper. Keep credentials in Git's normal credential tooling.
+
+## Try the interface
+
+```bash
+npm ci
+npm run dev:web
+```
+
+Open the local URL shown by Vite. Browser mode uses synthetic demo data and does not operate on a real repository. All screenshots in this README were captured in that demo/test mode; they contain no private repository data.
+
+For the native application:
+
+```bash
+npm run dev
+```
+
+## Use as an external merge tool
+
+```bash
+mergecraft --merge <local> <base> <incoming> <result> [local-label] [incoming-label]
+```
+
+Optional Git configuration:
 
 ```bash
 git config --global merge.tool mergecraft
 git config --global mergetool.mergecraft.cmd \
-  'mergecraft --merge "$LOCAL" "$BASE" "$REMOTE" "$MERGED" "$MERGED" "$REMOTE"'
+  'mergecraft --merge "$LOCAL" "$BASE" "$REMOTE" "$MERGED"'
 git config --global mergetool.mergecraft.trustExitCode true
 ```
 
-## Diagnose ohne GUI
+## Built with
 
-```bash
-mergecraft --diag ~/develop/n4kit              # Status, Branches, Konflikte, Merge-Bereiche
-mergecraft --diag ~/develop/n4kit src/main.rs  # einzelne Konfliktdatei
-MERGECRAFT_DIAG_JSON=1 mergecraft --diag .     # zusätzlich JSON
-MERGECRAFT_DIAG_WRITE=1 mergecraft --diag --merge ours base theirs merged main feat
+**Rust + Tauri 2** for the native app and Git integration; **TypeScript + Vite** for the interface. The Rust core has randomized differential tests against `git merge-file`, regression tests and real-repository workflow tests. Browser tests cover the UI and mocked application flows; native fixtures exercise the actual Tauri/Git bridge.
+
+```text
+core/        Git integration, three-way merge engine and regression tests
+src/         Desktop interface, diff viewer and merge editor
+src-tauri/   Native application, commands and diagnostics
+packaging/   User installation and desktop integration
+scripts/     Development and test helpers
+tests/       Browser and native workflow checks
+docs/        User guide, development notes and demo screenshots
 ```
 
-## Selbsttest (Oberfläche ohne Bildschirmfoto prüfen)
+## License
 
-Auf Wayland lässt sich das Fenster nicht abfotografieren (der Compositor zeichnet).
-Mergecraft kann deshalb ein Skript in die Oberfläche injizieren und das Ergebnis
-zurückmelden:
-
-```bash
-MERGECRAFT_SELFTEST=packaging/selftest-merge.js \
-MERGECRAFT_SELFTEST_OUT=/tmp/ergebnis.txt mergecraft /pfad/zum/repo
-```
-
-Das Skript löst echte Klicks aus und beendet sich über den Befehl
-`selftest_report`; geprüft wird anschließend am Ergebnis auf der Platte
-(`git status`, Dateiinhalt). Zwei Beispiele liegen in `packaging/`.
-
-## Aufbau
-
-```
-core/                 reine Rust-Bibliothek (kein GUI, schnell testbar)
-  merge.rs            3-Wege-Engine: Regionen, Auflösung, Wort-Hervorhebung
-  gitcli.rs           Git über die echte CLI
-  hunks.rs            Änderungsblöcke aus `git diff` (Vergleichsquelle im Test)
-  verify.rs           Wächter: fragt `git merge-file` vor einem stillen Auto-Merge
-src-tauri/            Tauri-App: Befehle, GTK-Ordnerauswahl, --diag
-  commands.rs         Repository, Branches, Status, Merge, Diffs, Konflikte
-src/                  Oberfläche (kein Framework)
-  main.ts             Rahmen: Kopfzeile, Aktivitätsleiste, Aktionen
-  merge.ts            3-Pane-Merge-Editor
-  diff.ts             Diff-Ansicht (nebeneinander/vereint)
-  branchmenu.ts       Branch-Popover mit Suche
-  panels.ts           Änderungen, Branch-Liste, Historie, Konsole
-  ui.ts               Icons, Dialoge, Toasts, Fuzzy-Suche
-  mock.ts             Demo-Backend für den Browser
-  styles.css          Design-System
-packaging/            Desktop-Eintrag + Installationsskript
-```
-
-Bewusste Entscheidung: **kein libgit2**, sondern die echte `git`-CLI – damit sind
-Merge-Strategien, Konfliktmarker, Hooks und Credential-Helper identisch zur
-Kommandozeile, und es gibt keine C-Abhängigkeit im Build.
-Die Ordnerauswahl läuft über GTK auf dem Haupt-Thread (nicht über
-`tauri-plugin-dialog`/rfd, dessen GTK-Backend sich in einer GTK-Host-App am
-globalen Main-Context aufhängt).
-
-## Wie die Merge-Engine abgesichert ist
-
-```bash
-cargo test -p mergecraft-core      # 26 Tests
-```
-
-* 3000 Zufallsfälle mit doppelten Zeilen (härtester Fall): Übereinstimmung mit
-  `git merge-file` > 99 %, 0 Textabweichungen bei sauberen Merges
-* SICHERHEITS-Invariante: kein Fall, in dem git einen Konflikt sieht und
-  Mergecraft ungeschützt automatisch mergt (geprüft inkl. Wächter)
-* 3000 Zufallsfälle ohne Duplikate: > 99 % Übereinstimmung, keine Textabweichung
-* Praxis-Regressionsfälle (Imports, Refactoring vs. Edit, Löschen vs. Anhängen,
-  gleiche Änderung auf beiden Seiten, überlappende Löschungen)
-* Ende-zu-Ende gegen echte Repositories: Konflikt erzeugen, die drei
-  Index-Stages lesen, auflösen, `git add`, Merge-Commit abschließen
+[MIT](LICENSE) · Copyright © 2026 Steffen Mohr.

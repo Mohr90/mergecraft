@@ -113,6 +113,142 @@ impl Git {
         self.root.join(rel)
     }
 
+    fn valid_branch(&self, name: &str) -> Result<(), String> {
+        if name.starts_with('-')
+            || name == "HEAD"
+            || name.is_empty()
+            || self.raw(["check-ref-format", "--branch", name]).code != 0
+        {
+            return Err(format!("Ungültiger Branch-Name: {name}"));
+        }
+        Ok(())
+    }
+
+    pub fn checkout_branch(
+        &self,
+        name: &str,
+        local_name: Option<&str>,
+        force: bool,
+        track: bool,
+    ) -> Result<CommandResult, String> {
+        self.valid_branch(name)?;
+        let local = local_name.unwrap_or(name);
+        let mut args = vec!["switch".to_string()];
+        if force {
+            args.push("--discard-changes".into());
+        }
+        if track {
+            self.valid_branch(local)?;
+            if self
+                .raw([
+                    "show-ref",
+                    "--verify",
+                    "--quiet",
+                    &format!("refs/heads/{local}"),
+                ])
+                .code
+                == 0
+            {
+                let upstream = self.run([
+                    "for-each-ref",
+                    "--format=%(upstream:short)",
+                    &format!("refs/heads/{local}"),
+                ])?;
+                if upstream.trim() != name {
+                    return Err(format!("Der lokale Branch „{local}“ existiert bereits und verfolgt „{}“. Wähle ihn ausdrücklich in der lokalen Liste.", upstream.trim()));
+                }
+                args.extend(["--".into(), local.into()]);
+            } else {
+                args.extend([
+                    "--create".into(),
+                    local.into(),
+                    "--track".into(),
+                    name.into(),
+                ]);
+            }
+        } else {
+            args.extend(["--".into(), name.into()]);
+        }
+        Ok(self.run_result(args))
+    }
+
+    /// Update an existing local branch only by fast-forward, with explicit state checks.
+    pub fn checkout_remote_update(&self, remote: &str, local: &str, expected_local: &str, expected_remote: &str) -> Result<CommandResult, String> {
+        self.valid_branch(remote)?;
+        self.valid_branch(local)?;
+        let snapshot=self.snapshot()?;
+        if snapshot.merging || snapshot.rebasing || snapshot.cherry_picking {
+            return Err("Schließe zuerst den laufenden Git-Vorgang ab.".into());
+        }
+        if !self.status()?.all.is_empty() {
+            return Err("Es gibt lokale Dateiänderungen. Committe oder verwerfe sie zuerst; der Branch wurde nicht aktualisiert.".into());
+        }
+        let local_ref=format!("refs/heads/{local}");
+        let remote_ref=format!("refs/remotes/{remote}");
+        let local_oid=self.run(["rev-parse", "--verify", &format!("{local_ref}^{{commit}}")])?;
+        let remote_oid=self.run(["rev-parse", "--verify", &format!("{remote_ref}^{{commit}}")])?;
+        if expected_local.len()<7 || expected_remote.len()<7 || !local_oid.trim().starts_with(expected_local) || !remote_oid.trim().starts_with(expected_remote) {
+            return Err("Der Branch-Stand hat sich geändert. Bitte aktualisieren und erneut auswählen.".into());
+        }
+        if self.raw(["merge-base", "--is-ancestor", local_oid.trim(), remote_oid.trim()]).code!=0 {
+            return Err("Der lokale Branch enthält eigene Commits. Automatisches Aktualisieren würde sie verwerfen. Öffne den lokalen Branch und vergleiche oder merge die Stände.".into());
+        }
+        let switched=self.checkout_branch(local,None,false,false)?;
+        if !switched.ok { return Ok(switched); }
+        let result=self.run_result(["merge", "--ff-only", "--no-edit", remote_oid.trim()]);
+        if result.ok {
+            self.run(["branch", &format!("--set-upstream-to={remote}"), "--", local])?;
+        }
+        Ok(result)
+    }
+
+    pub fn create_branch(
+        &self,
+        name: &str,
+        start: Option<&str>,
+        checkout: bool,
+    ) -> Result<CommandResult, String> {
+        self.valid_branch(name)?;
+        if start.is_some_and(|s| s.starts_with('-')) {
+            return Err("Ungültiger Startpunkt".into());
+        }
+        let mut args = if checkout {
+            vec!["switch", "--create", name]
+        } else {
+            vec!["branch", name]
+        };
+        if let Some(start) = start.filter(|s| !s.is_empty()) {
+            args.push(start);
+        }
+        Ok(self.run_result(args))
+    }
+
+    /// Preserve raw index bytes, executable mode, symlinks and absent sides.
+    pub fn resolve_side(&self, path: &str, side: &str) -> Result<CommandResult, String> {
+        let stage = match side {
+            "ours" | "lokal" => "2",
+            "theirs" | "eingehend" => "3",
+            _ => return Err("Unbekannte Konfliktseite".into()),
+        };
+        let entries = self.run(["ls-files", "--unmerged", "-z", "--", path])?;
+        if entries.is_empty() {
+            return Err("Die Datei hat keinen ungelösten Konflikt".into());
+        }
+        let exists = entries
+            .split('\0')
+            .filter_map(|entry| entry.split_once('\t'))
+            .any(|(meta, _)| meta.split_whitespace().nth(2) == Some(stage));
+        if !exists {
+            return Ok(self.run_result(["rm", "-f", "--", path]));
+        }
+        let flag = if stage == "2" { "--ours" } else { "--theirs" };
+        let restored = self.run_result(["checkout", flag, "--", path]);
+        if !restored.ok {
+            return Ok(restored);
+        }
+        Ok(self.run_result(["add", "--", path]))
+    }
+
     // ------------------------------------------------------- Zustand & Liste
 
     pub fn snapshot(&self) -> Result<RepoSnapshot, String> {
@@ -190,7 +326,9 @@ impl Git {
             let name = f[0].to_string();
             // "origin/feature/x" -> lokal als "feature/x" auschecken
             let checkout_name = if is_remote {
-                name.split_once('/').map(|(_, b)| b.to_string()).unwrap_or(name.clone())
+                name.split_once('/')
+                    .map(|(_, b)| b.to_string())
+                    .unwrap_or(name.clone())
             } else {
                 name.clone()
             };
@@ -203,6 +341,7 @@ impl Git {
                 short_hash: f[2].to_string(),
                 timestamp: f[4].parse().unwrap_or(0),
                 subject: f[5].to_string(),
+                tracking_known: false,
                 ahead: 0,
                 behind: 0,
                 checkout_name,
@@ -215,12 +354,61 @@ impl Git {
             }
             if let Some(up) = b.upstream.clone() {
                 if let Some((ahead, behind)) = self.ahead_behind(&up, &b.name) {
+                    b.tracking_known = true;
                     b.ahead = ahead;
                     b.behind = behind;
                 }
             }
         }
         Ok(v)
+    }
+
+    pub fn tags(&self) -> Result<Vec<TagInfo>, String> {
+        let fmt = format!("%(refname:strip=2){s}%(refname){s}%(objecttype){s}%(objectname){s}%(*objecttype){s}%(*objectname){s}%(creatordate:unix){s}%(subject){s}%(if)%(taggername)%(then)%(taggername)%(else)%(authorname)%(end){r}", s=SEP, r=REC);
+        let out = self.run([
+            "for-each-ref",
+            &format!("--format={fmt}"),
+            "--sort=-creatordate",
+            "refs/tags",
+        ])?;
+        let mut tags = Vec::new();
+        for record in out.split(REC) {
+            let fields: Vec<&str> = record.trim_matches('\n').split(SEP).collect();
+            if fields.len() < 9 {
+                continue;
+            }
+            let commit = match (fields[2], fields[4]) {
+                ("commit", _) => Some(fields[3].to_string()),
+                ("tag", "commit") => Some(fields[5].to_string()),
+                ("tag", "tag") => self
+                    .run([
+                        "rev-parse",
+                        "--verify",
+                        "--end-of-options",
+                        &format!("{}^{{commit}}", fields[1]),
+                    ])
+                    .ok()
+                    .map(|hash| hash.trim().to_string()),
+                _ => None,
+            };
+            let short_hash = commit
+                .as_deref()
+                .unwrap_or(fields[3])
+                .chars()
+                .take(7)
+                .collect();
+            tags.push(TagInfo {
+                name: fields[0].into(),
+                full_name: fields[1].into(),
+                commit,
+                short_hash,
+                is_annotated: fields[2] == "tag",
+                timestamp: fields[6].parse().unwrap_or(0),
+                subject: fields[7].into(),
+                author: fields[8].into(),
+            });
+        }
+        Ok(tags)
     }
 
     /// (voraus, zurück) gegenüber einem Upstream.
@@ -329,10 +517,7 @@ impl Git {
             if let Some(e) = st.conflicts.iter().find(|e| e.path == c.path) {
                 c.code = e.conflict_code.clone().unwrap_or_default();
             }
-            c.has_base = self
-                .raw(["cat-file", "-e", &format!(":1:{}", c.path)])
-                .code
-                == 0;
+            c.has_base = self.raw(["cat-file", "-e", &format!(":1:{}", c.path)]).code == 0;
         }
         Ok(seen)
     }
@@ -343,15 +528,54 @@ impl Git {
         all: bool,
         path: Option<&str>,
     ) -> Result<Vec<CommitInfo>, String> {
-        let fmt = format!("%H{s}%h{s}%an{s}%ae{s}%at{s}%P{s}%D{s}%s{r}", s = SEP, r = REC);
+        self.log_from(limit, all, path, None, false)
+    }
+
+    pub fn commit_info(&self, revision: &str) -> Result<CommitInfo, String> {
+        let hash = self.run([
+            "rev-parse",
+            "--verify",
+            "--end-of-options",
+            &format!("{revision}^{{commit}}"),
+        ])?;
+        self.log_from(1, false, None, Some(hash.trim()), false)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| "Commit nicht gefunden".into())
+    }
+
+    pub fn file_history(&self, path: &str, limit: usize) -> Result<Vec<CommitInfo>, String> {
+        self.log_from(limit, false, Some(path), None, true)
+    }
+
+    fn log_from(
+        &self,
+        limit: usize,
+        all: bool,
+        path: Option<&str>,
+        revision: Option<&str>,
+        follow: bool,
+    ) -> Result<Vec<CommitInfo>, String> {
+        let fmt = format!(
+            "%H{s}%h{s}%an{s}%ae{s}%at{s}%P{s}%D{s}%s{r}",
+            s = SEP,
+            r = REC
+        );
         let mut args: Vec<String> = vec![
             "log".into(),
             format!("--pretty=format:{fmt}"),
             format!("-n{limit}"),
             "--date-order".into(),
         ];
+        if follow {
+            args.insert(0, "--literal-pathspecs".into());
+            args.push("--follow".into());
+        }
         if all {
             args.push("--all".into());
+        }
+        if let Some(revision) = revision {
+            args.push(revision.to_string());
         }
         if let Some(p) = path {
             args.push("--".into());
@@ -428,7 +652,7 @@ impl Git {
         spec_b: &str,
         path: Option<&str>,
     ) -> Result<Vec<FileChange>, String> {
-        let mut args = vec!["diff", "--name-status", "-M"];
+        let mut args = vec!["diff", "--name-status", "-z", "-M"];
         if !spec_a.is_empty() {
             args.push(spec_a);
         }
@@ -441,21 +665,18 @@ impl Git {
         }
         let out = self.run(args)?;
         let mut v = Vec::new();
-        for line in out.lines() {
-            if line.trim().is_empty() {
-                continue;
-            }
-            let mut parts = line.split('\t');
-            let status = parts.next().unwrap_or("").to_string();
-            let first = parts.next().unwrap_or("").to_string();
-            let p = if status.starts_with('R') || status.starts_with('C') {
-                parts.next().unwrap_or(&first).to_string()
+        let mut fields = out.split('\0').filter(|field| !field.is_empty());
+        while let Some(status) = fields.next() {
+            let Some(first) = fields.next() else { break };
+            let path = if status.starts_with('R') || status.starts_with('C') {
+                fields.next().unwrap_or(first)
             } else {
                 first
             };
-            if !p.is_empty() {
-                v.push(FileChange { status, path: p });
-            }
+            v.push(FileChange {
+                status: status.to_string(),
+                path: path.to_string(),
+            });
         }
         Ok(v)
     }
@@ -465,16 +686,18 @@ impl Git {
     /// Inhalt einer Stage (":1:Pfad" = Basis, ":2:" = lokal, ":3:" = eingehend)
     /// oder einer Revision ("REV:Pfad").
     pub fn blob(&self, spec: &str) -> Option<(String, bool)> {
-        let o = self.raw(["show", spec]);
-        if o.code != 0 {
+        let output = self.base_command().args(["show", spec]).output().ok()?;
+        if !output.status.success() {
             return None;
         }
-        Some((o.stdout.clone(), o.stdout.contains('\u{0}')))
+        let data = output.stdout;
+        let binary = data.contains(&0) || std::str::from_utf8(&data).is_err();
+        Some((String::from_utf8_lossy(&data).to_string(), binary))
     }
 
     pub fn working_file(&self, rel: &str) -> Option<(String, bool)> {
         let data = std::fs::read(self.path(rel)).ok()?;
-        let binary = data.contains(&0);
+        let binary = data.contains(&0) || std::str::from_utf8(&data).is_err();
         Some((String::from_utf8_lossy(&data).to_string(), binary))
     }
 
@@ -484,6 +707,31 @@ impl Git {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         std::fs::write(&p, text).map_err(|e| format!("{}: {e}", p.display()))
+    }
+
+    /// Resolve missing tracking only after the UI explicitly confirms the unique same-name remote.
+    pub fn prepare_pull(&self, expected_branch: Option<&str>, track_same_name: bool) -> Result<(), String> {
+        let snapshot = self.snapshot()?;
+        if snapshot.merging || snapshot.rebasing || snapshot.cherry_picking {
+            return Err("Schließe zuerst den laufenden Git-Vorgang ab.".into());
+        }
+        let branch = snapshot.head_branch.ok_or("Kein Branch ausgecheckt. Wechsle zuerst auf einen lokalen Branch.")?;
+        if expected_branch.is_some_and(|expected| expected != branch) {
+            return Err("Der Branch wurde inzwischen gewechselt. Bitte Pull erneut starten.".into());
+        }
+        let branches = self.branches()?;
+        let current = branches.iter().find(|b| b.is_current).ok_or("Aktueller Branch nicht verfügbar.")?;
+        if current.upstream.is_none() {
+            if !track_same_name {
+                return Err("Kein Upstream eingerichtet. Ordne zuerst einen Remote-Branch für Pull zu.".into());
+            }
+            let candidates: Vec<_> = branches.iter().filter(|b| b.is_remote && b.checkout_name == branch).collect();
+            if candidates.len() != 1 {
+                return Err("Kein eindeutiger Remote-Branch mit gleichem Namen. Bitte die Upstream-Zuordnung prüfen.".into());
+            }
+            self.run(["branch", &format!("--set-upstream-to={}", candidates[0].name), "--", &branch])?;
+        }
+        Ok(())
     }
 
     pub fn merge_state(&self) -> bool {

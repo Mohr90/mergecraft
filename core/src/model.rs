@@ -14,12 +14,35 @@ pub struct BranchInfo {
     pub short_hash: String,
     pub timestamp: i64,
     pub subject: String,
+    /// True only when comparison with the upstream succeeded.
+    #[serde(default)]
+    pub tracking_known: bool,
     /// Commits, die nur lokal existieren
     pub ahead: i32,
     /// Commits, die nur beim Upstream existieren
     pub behind: i32,
     /// Schlüssel für das Auschecken (bei Remote-Branches ohne Remote-Präfix)
     pub checkout_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StashInfo {
+    pub oid: String,
+    pub selector: String,
+    pub message: String,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagInfo {
+    pub name: String,
+    pub full_name: String,
+    pub commit: Option<String>,
+    pub short_hash: String,
+    pub is_annotated: bool,
+    pub timestamp: i64,
+    pub subject: String,
+    pub author: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,6 +151,8 @@ pub struct ConflictData {
     pub ours_label: String,
     pub theirs_label: String,
     pub result_text: String,
+    #[serde(default)]
+    pub working_modified: bool,
     /// git meldet einen Konflikt, die Analyse nicht -> alles einzeln bestätigen
     pub guarded: bool,
     /// Wort-Hervorhebungen je Seite (Schlüssel = 0-basierter Zeilenindex)

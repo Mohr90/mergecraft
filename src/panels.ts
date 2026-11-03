@@ -8,8 +8,10 @@ import type {
   RepoSnapshot,
   RepoStatus,
 } from "./api";
+import { branchSync } from "./sync";
+import { canMergeInto } from "./workflow";
 import { baseName, dirName } from "./merge";
-import { absTime, el, esc, icon, relTime, splitPath } from "./ui";
+import { absTime, el, esc, fuzzy, icon, relTime, splitPath } from "./ui";
 
 export interface PanelCtx {
   snapshot(): RepoSnapshot | null;
@@ -20,21 +22,29 @@ export interface PanelCtx {
   commitFiles(): FileChange[];
   logLines(): string[];
   openMerge(path: string): void;
-  openWorkingDiff(path: string): void;
+  openWorkingDiff(path: string, area?: "staged" | "work" | "untracked"): void;
+  previewFile?(path: string, area: "staged" | "work" | "untracked"): void;
+  showFileHistory?(path: string): void;
+  historyPath?: string | null;
+  favoriteBranches?(): Set<string>;
+  toggleFavorite?(name: string): void;
   openCommitDiff(hash: string, path: string): void;
   selectCommit(hash: string): void;
   openBranchMenu(anchor: HTMLElement): void;
   checkout(b: BranchInfo): void;
   merge(b: BranchInfo): void;
-  rename(b: BranchInfo): void;
+  compare(b: BranchInfo): void;
+  mergeAbort(): void;
+  mergeContinue(): void;
   remove(b: BranchInfo): void;
   newFrom(b: BranchInfo | null): void;
   run(label: string, fn: () => Promise<CommandResult>): void;
   runMerge(label: string, fn: () => Promise<any>): void;
-  commit(message: string, amend: boolean, sign: boolean, all: boolean): void;
+  commit(message: string, amend: boolean): void;
   stage(paths: string[]): void;
   unstage(paths: string[]): void;
   discard(paths: string[]): void;
+  rollback(paths?: string[]): void;
   resolveSide(path: string, side: "ours" | "theirs"): void;
   rawGit(cmd: string): void;
   rawCommand(args: string[]): Promise<CommandResult>;
@@ -54,42 +64,52 @@ const STATUS_LETTER: Record<string, string> = {
 };
 
 function fileRow(
-  entry: { path: string; state: string; conflict_code?: string | null; orig_path?: string | null },
-  actions: { act: string; label: string; title: string; danger?: boolean; primary?: boolean }[],
+  entry: { path: string; state: string; conflict_code?: string | null; orig_path?: string | null; partial?: boolean },
+  actions: { act: string; label: string; title: string; danger?: boolean; primary?: boolean; disabled?: boolean }[],
+  area = "work",
 ): string {
   const { dir, base } = splitPath(entry.path);
   return `
-    <div class="row" data-path="${esc(entry.path)}">
+    <div class="row" data-path="${esc(entry.path)}" data-area="${area}">
+      ${entry.state !== "conflicted" ? `<label class="stage-check" title="${area === "staged" ? "Aus dem nächsten Commit herausnehmen" : "Änderungen für den nächsten Commit vormerken"}"><input type="checkbox" data-stage-file="${area}" ${area === "staged" ? "checked" : ""} aria-label="${area === "staged" ? "Für Commit vorgemerkt" : "Für Commit vormerken"}: ${esc(entry.path)}"></label>` : ""}
       <span class="status ${entry.state}" title="${esc(entry.conflict_code ?? entry.state)}">${
         esc(entry.conflict_code ?? STATUS_LETTER[entry.state] ?? "?")
       }</span>
-      <span class="fpath" title="${esc(entry.path)}"><span class="dir">${esc(dir)}</span><b>${esc(base)}</b></span>
+      <button class="fpath" data-row-act="diff" title="Änderungen ansehen: ${esc(entry.path)}"><span class="dir">${esc(dir)}</span><b>${esc(base)}</b></button>
       ${
         entry.orig_path
           ? `<span class="chip">aus ${esc(entry.orig_path)}</span>`
           : ""
       }
+      ${entry.partial ? `<span class="partial-stage" title="Ein Teil dieser Datei ist vorgemerkt. Weitere Änderungen stehen unter „Noch nicht vorgemerkt“.">Weitere Änderungen</span>` : ""}
       <span class="actions">
         ${actions
+          .filter(a => !["diff","stage","unstage"].includes(a.act))
           .map(
             (a) =>
-              `<button class="mini${a.danger ? " danger" : ""}${a.primary ? " primary" : ""}" data-row-act="${a.act}" title="${esc(a.title)}">${esc(a.label)}</button>`,
+              `<button class="mini${a.danger ? " danger" : ""}${a.primary ? " primary" : ""}" data-row-act="${a.act}" ${a.disabled ? "disabled" : ""} title="${esc(a.title)}" aria-label="${esc(a.label)}: ${esc(entry.path)}">${a.act === "rollback" ? icon("undo",15) : esc(a.label)}</button>`,
           )
           .join("")}
+        <button class="mini row-secondary" data-row-act="history" title="Dateihistorie ansehen" aria-label="Historie: ${esc(entry.path)}">${icon("history",15)}</button>
       </span>
     </div>`;
 }
 
 export function renderChanges(ctx: PanelCtx): HTMLElement {
   const st = ctx.status();
-  const wrap = el("div", "panel-pad");
+  const wrap = el("div", "panel-pad changes-panel");
   if (!st) {
     wrap.appendChild(el("div", "empty", `${icon("changes", 26)}<b>Kein Repository geöffnet</b>`));
     return wrap;
   }
+  const snap = ctx.snapshot?.();
+  const blocked = !!(st.merging || st.conflicts.length || snap?.rebasing || snap?.cherry_picking);
+  const tracked = st.staged.length + st.changed.length;
+  wrap.insertAdjacentHTML("beforeend", `<header class="page-heading"><div><h1>Änderungen</h1><p class="muted">Prüfe deine Änderungen und bereite den nächsten Commit vor.</p></div>
+    <div class="changes-actions"><button class="btn" data-top-act="rollback" ${blocked || !tracked || !snap?.head ? "disabled" : ""}>${icon("undo",14)} Rollback …</button></div></header>`);
   const mergingBanner = st.merging
     ? `<div class="banner error">${icon("merge", 15)}
-        <b>Merge läuft.</b> ${st.conflicts.length} Datei(en) mit Konflikten.
+        <b>Merge noch nicht abgeschlossen.</b> ${st.conflicts.length ? `${st.conflicts.length} Datei(en) mit Konflikten. Löse diese zuerst.` : "Alle Konflikte sind gelöst. „Merge abschließen“ erstellt den Merge-Commit. Danach kannst du pushen."}
         <span class="right"><button class="btn" data-top-act="merge-abort">Merge abbrechen</button>
         ${
           st.conflicts.length === 0
@@ -98,18 +118,15 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
         }</span></div>`
     : "";
   if (mergingBanner) wrap.insertAdjacentHTML("beforeend", mergingBanner);
-
   const section = (
     title: string,
     entries: RepoStatus["all"],
     rows: string,
-    batch: { act: string; label: string } | null,
   ) => {
     if (!entries.length) return "";
     return `
       <section class="section">
         <header><h3>${title}</h3><span class="count">${entries.length}</span>
-          ${batch ? `<span class="right row-actions-gap"><button class="mini" data-top-act="${batch.act}">${batch.label}</button></span>` : ""}
         </header>
         <div class="rows">${rows}</div>
       </section>`;
@@ -126,37 +143,38 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
     .join("");
   const stagedRows = st.staged
     .map((e) =>
-      fileRow(e, [
-        { act: "diff", label: "Diff", title: "Gegen HEAD vergleichen" },
-        { act: "unstage", label: "unstagen", title: "Zurück in die Arbeitskopie" },
-      ]),
+      fileRow({...e,partial:st.changed.some(file=>file.path===e.path)}, [
+        { act: "diff", label: "Diff", title: "Änderungen ansehen" },
+        { act: "unstage", label: "Herausnehmen", title: "Zurück in die Arbeitskopie" },
+        { act: "rollback", label: "Rollback", title: "Auf den letzten Commit zurücksetzen", danger: true, disabled: blocked },
+      ], "staged"),
     )
     .join("");
   const changedRows = st.changed
     .map((e) =>
       fileRow(e, [
-        { act: "diff", label: "Diff", title: "Gegen HEAD vergleichen" },
-        { act: "stage", label: "stagen", title: "Zum Commit vormerken" },
-        { act: "discard", label: "verwerfen", title: "Änderungen verwerfen", danger: true },
+        { act: "diff", label: "Diff", title: "Änderungen ansehen" },
+        { act: "stage", label: "Vormerken", title: "Zum Commit vormerken" },
+        { act: "rollback", label: "Rollback", title: "Auf den letzten Commit zurücksetzen", danger: true, disabled: blocked },
       ]),
     )
     .join("");
   const untrackedRows = st.untracked
     .map((e) =>
       fileRow(e, [
-        { act: "stage", label: "stagen", title: "Zum Commit vormerken" },
+        { act: "stage", label: "Vormerken", title: "Zum Commit vormerken" },
         { act: "discard", label: "löschen", title: "Datei löschen", danger: true },
-      ]),
+      ], "untracked"),
     )
     .join("");
 
   wrap.insertAdjacentHTML(
     "beforeend",
     `
-    ${section("Konflikte", st.conflicts, conflictRows, null)}
-    ${section("Gestaged", st.staged, stagedRows, { act: "unstage-all", label: "alle unstagen" })}
-    ${section("Änderungen", st.changed, changedRows, { act: "stage-all", label: "alle stagen" })}
-    ${section("Unversioniert", st.untracked, untrackedRows, { act: "stage-all", label: "alle stagen" })}
+    ${section("Konflikte", st.conflicts, conflictRows)}
+    ${section("Für Commit vorgemerkt", st.staged, stagedRows)}
+    ${section("Noch nicht vorgemerkt", st.changed, changedRows)}
+    ${section("Neue Dateien", st.untracked, untrackedRows)}
     ${
       st.all.length === 0
         ? `<div class="empty">${icon("check", 26)}<b>Arbeitskopie ist sauber</b><div class="small">Keine Änderungen, keine Konflikte.</div></div>`
@@ -164,37 +182,69 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
     }`,
   );
 
+  const pending = [...new Set([...st.changed,...st.untracked].map(file=>file.path))];
+  const selectable = st.staged.length + pending.length;
+  if(selectable) {
+    const selection=el("div","staging-summary");
+    selection.innerHTML=`<label><input type="checkbox" data-stage-all aria-label="Alle Änderungen für Commit vormerken" ${st.staged.length && !pending.length ? "checked" : ""}><span>Alle Änderungen</span></label><span class="small muted">${st.staged.length} vorgemerkt · ${pending.length} offen</span>`;
+    selection.querySelector<HTMLInputElement>("input")!.indeterminate=st.staged.length>0 && pending.length>0;
+    wrap.appendChild(selection);
+  }
+  const list=el("div", "changes-list");
+  const sections=[...wrap.children].filter(node=>node.matches(".section,.empty"));
+  if(sections.length) { wrap.insertBefore(list,sections[0]); sections.forEach(node=>list.appendChild(node)); }
+
+  const summary=wrap.querySelector(".staging-summary");
+  if(summary) list.prepend(summary);
+  wrap.addEventListener("change",event=>{
+    const input=event.target as HTMLInputElement;
+    if(!input.matches('input[data-stage-file],input[data-stage-all]')) return;
+    let paths:string[]=[];
+    let unstage=false;
+    if(input.hasAttribute("data-stage-all")) {
+      unstage=!input.checked;
+      paths=unstage ? st.staged.map(file=>file.path) : pending;
+    } else {
+      const row=input.closest<HTMLElement>(".row")!;
+      paths=[row.dataset.path!];unstage=input.dataset.stageFile==="staged";
+    }
+    if(!paths.length) return;
+    wrap.querySelectorAll<HTMLInputElement>('input[data-stage-file],input[data-stage-all]').forEach(control=>control.disabled=true);
+    if(unstage)ctx.unstage(paths);else ctx.stage(paths);
+  });
+
   // Commit-Box
   const box = el("section", "commit-box");
   box.innerHTML = `
-    <textarea class="commit-msg" placeholder="Commit-Nachricht …" rows="3"></textarea>
+    <div class="commit-heading"><label for="commit-message">Commit vorbereiten</label><span class="commit-count">${st.staged.length} vorgemerkt</span>
+      <button class="mini" data-top-act="last-message" title="Eine vorherige Commit-Nachricht übernehmen">Letzte Nachricht</button></div>
+    <textarea id="commit-message" aria-label="Commit-Nachricht" class="commit-msg" placeholder="Commit-Nachricht …" rows="3"></textarea>
+    <p class="small muted commit-hint" role="status"></p>
     <div class="line2">
+      <label class="commit-mode-label">Commit-Art
+        <select class="commit-mode" aria-label="Commit-Art">
+          <option value="new">Neuer Commit</option>
+          <option value="amend">Letzten Commit ändern (Amend)</option>
+        </select>
+      </label>
       <span class="right row-actions-gap">
-        <button class="mini" data-top-act="last-message">Letzte Nachricht</button>
-      </span>
-      <label class="switch"><input type="checkbox" class="opt-all"> alle Änderungen (git commit -a)</label>
-      <label class="switch"><input type="checkbox" class="opt-amend"> amend</label>
-      <label class="switch"><input type="checkbox" class="opt-sign"> signieren (-S)</label>
-      <span class="right row-actions-gap">
-        <span class="muted small">${st.staged.length} Datei(en) bereit</span>
-        <button class="btn primary" data-top-act="commit" title="Strg+Enter">${icon("check", 14)} Commit
+        <button class="btn primary" data-top-act="commit" title="Lokalen Commit erstellen (Strg+Enter). Mit Push veröffentlichen.">${icon("check", 14)} Commit
           <span class="kbd">Strg+↵</span></button>
       </span>
     </div>`;
+  const mode = box.querySelector<HTMLSelectElement>(".commit-mode")!;
+  const updateCommit = () => {
+    const button=box.querySelector<HTMLButtonElement>('[data-top-act="commit"]')!;
+    button.innerHTML=`${icon("check",14)} ${mode.value === "amend" ? "Commit ändern" : "Commit"} <span class="kbd">Strg+↵</span>`;
+    const amend=mode.value === "amend";
+    button.disabled=blocked || (!amend && !st.staged.length) || (amend && !snap?.head);
+    const hint=blocked ? "Schließe zuerst den laufenden Git-Vorgang ab oder löse die Konflikte." : amend ? "Ändert den letzten Commit. Das ist auch ohne Dateiänderungen möglich." : st.staged.length ? "Die angehakten Änderungen werden lokal gespeichert. Danach kannst du pushen." : st.all.length ? "Hake zuerst die Dateien an, die du committen möchtest." : "Keine Änderungen vorhanden – es gibt nichts Neues zu committen.";
+    box.querySelector(".commit-hint")!.textContent=hint;
+    button.title=button.disabled ? hint : "Lokalen Commit erstellen (Strg+Enter). Mit Push veröffentlichen.";
+  };
+  mode.addEventListener("change", updateCommit);
+  updateCommit();
   wrap.appendChild(box);
-
-  // Doppelklick öffnet die Datei: Konflikt -> Merge-Editor, sonst Diff
-  wrap.addEventListener("dblclick", (e) => {
-    const row = (e.target as HTMLElement).closest(".row") as HTMLElement | null;
-    const path = row?.dataset.path;
-    if (!path) return;
-    const entry = st.conflicts
-      .concat(st.staged, st.changed, st.untracked)
-      .find((x) => x.path === path);
-    if (!entry) return;
-    if (entry.state === "conflicted") ctx.openMerge(path);
-    else if (entry.state !== "untracked") ctx.openWorkingDiff(path);
-  });
 
   wrap.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
@@ -205,13 +255,18 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
         case "merge":
           return ctx.openMerge(path);
         case "diff":
-          return ctx.openWorkingDiff(path);
+          if (st.conflicts.some(x=>x.path===path)) return ctx.openMerge(path);
+          const area = (target.closest(".row") as HTMLElement).dataset.area as "staged" | "work" | "untracked";
+          return ctx.previewFile ? ctx.previewFile(path, area) : ctx.openWorkingDiff(path, area);
+        case "history": return ctx.showFileHistory?.(path);
         case "stage":
           return ctx.stage([path]);
         case "unstage":
           return ctx.unstage([path]);
         case "discard":
           return ctx.discard([path]);
+        case "rollback":
+          return ctx.rollback([path]);
         case "take-ours":
           return ctx.resolveSide(path, "ours");
         case "take-theirs":
@@ -222,8 +277,11 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
     const top = (target.closest("[data-top-act]") as HTMLElement | null)?.dataset.topAct;
     if (!top) return;
     switch (top) {
+      case "rollback": return ctx.rollback();
+      case "stage-changed":
+        return ctx.stage(st.changed.map((x) => x.path));
       case "stage-all":
-        return ctx.stage(st.untracked.concat(st.changed).map((x) => x.path));
+        return ctx.stage(st.untracked.map((x) => x.path));
       case "unstage-all":
         return ctx.unstage(st.staged.map((x) => x.path));
       case "last-message": {
@@ -258,15 +316,13 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
       }
       case "commit": {
         const msg = (box.querySelector(".commit-msg") as HTMLTextAreaElement).value;
-        const all = (box.querySelector(".opt-all") as HTMLInputElement).checked;
-        const amend = (box.querySelector(".opt-amend") as HTMLInputElement).checked;
-        const sign = (box.querySelector(".opt-sign") as HTMLInputElement).checked;
-        return ctx.commit(msg, amend, sign, all);
+        const amend = (box.querySelector(".commit-mode") as HTMLSelectElement).value === "amend";
+        return ctx.commit(msg, amend);
       }
       case "merge-abort":
-        return ctx.run("Merge abbrechen", () => ctx.rawCommand(["merge", "--abort"]));
+        return ctx.mergeAbort();
       case "merge-continue":
-        return ctx.run("Merge abschließen", () => ctx.rawCommand(["commit", "--no-edit"]));
+        return ctx.mergeContinue();
       case "resolve-first": {
         const first = ctx.status()?.conflicts[0];
         if (first) ctx.openMerge(first.path);
@@ -277,114 +333,148 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
   return wrap;
 }
 
-export function renderBranches(ctx: PanelCtx): HTMLElement {
-  const wrap = el("div", "panel-pad");
-  const all = ctx.branches();
-  const local = all.filter((b) => !b.is_remote);
-  const remote = all.filter((b) => b.is_remote);
-  wrap.insertAdjacentHTML(
-    "beforeend",
-    `
-    <div class="section">
-      <header style="margin-bottom:12px">
-        <h2>Branches</h2><span class="count">${all.length}</span>
-        <span class="right row-actions-gap">
-          <label class="switch"><input type="checkbox" class="opt-noff" ${ctx.mergeNoFF() ? "checked" : ""}>
-            Merge immer als Merge-Commit (--no-ff)</label>
-          <button class="btn" data-branch-act="search">${icon("search", 14)} Suchen &amp; wechseln</button>
-          <button class="btn primary" data-branch-act="create">${icon("plus", 14)} Neuer Branch</button>
-        </span>
-      </header>
-      <div class="rows">
-        ${local
-          .map((b) =>
-            branchRow(b, ctx.snapshot()?.head_branch === b.name),
-          )
-          .join("")}
-      </div>
-    </div>
-    <div class="section">
-      <header><h3>Remote</h3><span class="count">${remote.length}</span></header>
-      <div class="rows">${remote.map((b) => branchRow(b, false)).join("")}</div>
-    </div>`,
-  );
-  const noff = wrap.querySelector(".opt-noff") as HTMLInputElement;
-  noff?.addEventListener("change", () => ctx.setMergeNoFF(noff.checked));
-  wrap.addEventListener("click", (e) => {
-    const target = e.target as HTMLElement;
-    const act = (target.closest("[data-branch-act]") as HTMLElement | null)?.dataset.branchAct;
-    if (act === "create") return ctx.newFrom(null);
-    if (act === "search") {
-      const anchor = ctx.searchAnchor();
-      if (anchor) ctx.openBranchMenu(anchor);
-      return;
-    }
-    const rowAct = (target.closest("[data-b-act]") as HTMLElement | null)?.dataset.bAct;
-    const name = (target.closest(".branch-row") as HTMLElement | null)?.dataset.name;
-    if (!rowAct || !name) return;
-    const branch = all.find((b) => b.name === name);
-    if (!branch) return;
-    switch (rowAct) {
-      case "checkout":
-        return ctx.checkout(branch);
-      case "merge":
-        return ctx.merge(branch);
-      case "rename":
-        return ctx.rename(branch);
-      case "delete":
-      case "delete-remote":
-        return ctx.remove(branch);
-      case "newfrom":
-        return ctx.newFrom(branch);
-    }
-  });
-  return wrap;
+export interface BranchViewState {
+  query: string;
+  scope: "all" | "local" | "remote";
+  sort: "recent" | "name";
+  scrollTop: number;
 }
 
-function branchRow(b: BranchInfo, isCurrent: boolean): string {
-  const ab = [
-    b.ahead ? `<span class="up">↑${b.ahead}</span>` : "",
-    b.behind ? `<span class="down">↓${b.behind}</span>` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  return `
-    <div class="branch-row${isCurrent ? " current" : ""}" data-name="${esc(b.name)}" data-remote="${b.is_remote}">
-      <span class="dot${isCurrent ? " on" : ""}"></span>
-      <span class="bname">${esc(b.name)}</span>
-      ${b.upstream ? `<span class="chip mono">→ ${esc(b.upstream)}</span>` : ""}
-      ${ab ? `<span class="ab-count">${ab}</span>` : ""}
-      <span class="bsub" title="${esc(b.subject)}">${esc(b.subject)}</span>
-      <span class="bdate nowrap" title="${esc(absTime(b.timestamp))}">${esc(b.short_hash)} · ${esc(
-        relTime(b.timestamp),
-      )}</span>
-      <span class="actions">
-        ${
-          isCurrent
-            ? `<span class="chip head">aktuell</span>`
-            : `<button class="mini" data-b-act="checkout">wechseln</button>
-               <button class="mini primary" data-b-act="merge" title="In den aktuellen Branch mergen">mergen</button>`
-        }
-        <button class="mini" data-b-act="newfrom" title="Neuen Branch hier starten">${icon("plus", 12)}</button>
-        ${
-          b.is_remote
-            ? `<button class="mini danger" data-b-act="delete-remote" title="Remote-Branch löschen">${icon("trash", 12)}</button>`
-            : isCurrent
-              ? ""
-              : `<button class="mini" data-b-act="rename" title="Umbenennen">${icon("pencil", 12)}</button>
-                 <button class="mini danger" data-b-act="delete" title="Löschen">${icon("trash", 12)}</button>`
-        }
-      </span>
-    </div>`;
+export function renderBranches(ctx: PanelCtx, state: BranchViewState = {query: "", scope: "all", sort: "recent", scrollTop: 0}): HTMLElement {
+  const wrap = el("div", "panel-pad branches-panel");
+  const all = ctx.branches();
+  const target = ctx.snapshot()?.head_branch ?? "detached HEAD";
+  const allowMerge=canMergeInto(ctx.snapshot()?.head_branch);
+  const merging = !!(ctx.snapshot()?.merging || ctx.snapshot()?.rebasing || ctx.snapshot()?.cherry_picking);
+  wrap.innerHTML = `
+    <div class="branch-toolbar"><header class="page-heading"><div><h1>Branches</h1>
+      <p class="muted">Branches durchsuchen, wechseln und vergleichen.</p></div>
+      <button class="btn primary" data-branch-act="create" ${merging ? "disabled" : ""}>${icon("plus", 14)} Neuer Branch</button></header>
+    ${merging ? `<div class="banner warn" role="status">Ein Git-Vorgang läuft. Löse zuerst die Konflikte unter „Änderungen“ und schließe den Vorgang ab.</div>` : ""}
+    <div class="branch-tools">
+      <label class="branch-search">${icon("search", 16)}<input type="search" aria-label="Branches filtern" placeholder="Name oder letzte Commit-Nachricht …"></label>
+      <label class="small">Anzeigen <select class="branch-scope" aria-label="Branch-Typ"><option value="all">Alle Branches</option><option value="local">Nur lokal</option><option value="remote">Nur remote</option></select></label>
+      <label class="small">Sortierung <select class="branch-sort" aria-label="Branches sortieren"><option value="recent">Zuletzt geändert</option><option value="name">Name A–Z</option></select></label>
+    </div>
+    ${allowMerge ? `<div class="merge-direction">${icon("merge", 16)}<span>„Mergen“ übernimmt den gewählten Branch in <strong class="mono">${esc(target)}</strong>.</span>
+      <label class="switch"><input type="checkbox" class="opt-noff" ${ctx.mergeNoFF() ? "checked" : ""}> Immer Merge-Commit erstellen</label></div>` : `<p class="integration-note">Integration in <span class="mono">${esc(target)}</span> über Merge Requests in GitLab.</p>`}
+    <div class="branch-filter-status" role="status"></div></div>
+    <div class="branch-groups"></div>`;
+  const search = wrap.querySelector('input[type="search"]') as HTMLInputElement;
+  const scope = wrap.querySelector('.branch-scope') as HTMLSelectElement;
+  const sort = wrap.querySelector('.branch-sort') as HTMLSelectElement;
+  const groups = wrap.querySelector('.branch-groups') as HTMLElement;
+  search.value = state.query; scope.value = state.scope; sort.value = state.sort;
+  const draw = () => {
+    state.query = search.value; state.scope = scope.value as BranchViewState["scope"]; state.sort = sort.value as BranchViewState["sort"];
+    const query = search.value.trim();
+    const filtered = all.filter(b => (!query || fuzzy(query, b.name) || b.subject.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+      && (scope.value === "all" || b.is_remote === (scope.value === "remote")))
+      .sort((a,b) => Number(b.is_current)-Number(a.is_current) || (sort.value === "name" ? a.name.localeCompare(b.name) : b.timestamp-a.timestamp));
+    const filteredActive = !!query || scope.value !== "all";
+    wrap.querySelector(".branch-filter-status")!.innerHTML = `<span>${filtered.length} von ${all.length} Branches${filteredActive ? " · gefiltert" : ""}</span>${filteredActive ? '<button class="mini" data-branch-act="reset">Filter zurücksetzen</button>' : ""}`;
+    const favorites = ctx.favoriteBranches?.() ?? new Set<string>();
+    groups.innerHTML = ["favorites", "local", "remote"].map(group => {
+      const rows = filtered.filter(b=>group === "favorites" ? favorites.has(b.name) : !favorites.has(b.name) && b.is_remote === (group === "remote"));
+      return rows.length ? `<section class="section"><header><h2>${group === "favorites" ? "Favoriten" : group === "remote" ? "Remote-Branches" : "Lokale Branches"}</h2><span class="count">${rows.length}</span></header><div class="rows">${rows.map(b=>branchRow(b, merging, target, favorites.has(b.name), allowMerge)).join("")}</div></section>` : "";
+    }).join("") || `<div class="empty"><b>${all.length ? "Keine passenden Branches" : "Noch keine Branches"}</b><span>${all.length ? "Passe Suche oder Filter an." : "Erstelle zuerst einen Commit unter Änderungen."}</span></div>`;
+  };
+  const filterChanged = () => { state.scrollTop = 0; draw(); groups.scrollTop = 0; };
+  search.addEventListener("input", filterChanged); scope.addEventListener("change", filterChanged); sort.addEventListener("change", filterChanged);
+  let menuAnchorScroll=groups.scrollTop;
+  groups.addEventListener("scroll", () => { state.scrollTop = groups.scrollTop;if(groups.scrollTop!==menuAnchorScroll)wrap.querySelectorAll<HTMLDetailsElement>(".branch-more[open]").forEach(menu=>menu.open=false);menuAnchorScroll=groups.scrollTop; });
+  const setMenuOpen=(menu:HTMLDetailsElement,open:boolean)=>{
+    menu.open=open;
+    const summary=menu.querySelector<HTMLElement>("summary")!;
+    summary.setAttribute("aria-expanded",String(open));
+    if(!open) return;
+    menuAnchorScroll=groups.scrollTop;
+    wrap.querySelectorAll<HTMLDetailsElement>("details.branch-more[open]").forEach(other=>{if(other!==menu){other.open=false;other.querySelector("summary")?.setAttribute("aria-expanded","false");}});
+    const popup=menu.querySelector<HTMLElement>(".branch-more-menu")!;
+    const rect=summary.getBoundingClientRect();
+    const width=Math.min(260,window.innerWidth-16);
+    popup.style.width=`${width}px`;popup.style.top="0px";
+    popup.style.left=`${Math.max(8,Math.min(rect.right-width,window.innerWidth-width-8))}px`;
+    const height=popup.getBoundingClientRect().height;
+    const top=rect.bottom+6+height>window.innerHeight-8 ? rect.top-height-6 : rect.bottom+6;
+    popup.style.top=`${Math.max(8,Math.min(top,window.innerHeight-height-8))}px`;
+    popup.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({preventScroll:true});
+  };
+  wrap.addEventListener("toggle",event=>{
+    const menu=event.target as HTMLDetailsElement;
+    if(menu.matches(".branch-more")) menu.querySelector("summary")?.setAttribute("aria-expanded",String(menu.open));
+  },true);
+  const noff = wrap.querySelector(".opt-noff") as HTMLInputElement;
+  noff?.addEventListener("change", () => ctx.setMergeNoFF(noff.checked));
+  wrap.addEventListener("keydown",event=>{
+    const menu=(event.target as HTMLElement).closest<HTMLDetailsElement>(".branch-more");
+    if(!menu) return;
+    if(event.key==="Escape" && menu.open) {event.preventDefault();event.stopPropagation();setMenuOpen(menu,false);menu.querySelector<HTMLElement>("summary")!.focus({preventScroll:true});return;}
+    if(["ArrowDown","ArrowUp","Home","End"].includes(event.key)) {
+      event.preventDefault();
+      if(!menu.open) {setMenuOpen(menu,true);return;}
+      const buttons=[...menu.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+      const current=buttons.indexOf(document.activeElement as HTMLButtonElement);
+      const next=event.key==="Home" ? 0 : event.key==="End" ? buttons.length-1 : (current+(event.key==="ArrowUp" ? -1 : 1)+buttons.length)%buttons.length;
+      buttons[next]?.focus({preventScroll:true});
+    }
+    if(event.key==="Tab" && menu.open) {setMenuOpen(menu,false);menu.querySelector<HTMLElement>("summary")!.focus({preventScroll:true});}
+  });
+  wrap.addEventListener("click", e => {
+    const target = e.target as HTMLElement;
+    const summary=target.closest<HTMLElement>(".branch-more summary");
+    if(summary) {e.preventDefault();const menu=summary.closest<HTMLDetailsElement>("details")!;setMenuOpen(menu,!menu.open);return;}
+    if (target.closest('[data-branch-act="create"]')) return ctx.newFrom(null);
+    if (target.closest('[data-branch-act="reset"]')) { search.value = ""; scope.value = "all"; filterChanged(); search.focus(); return; }
+    const button = target.closest('[data-b-act]') as HTMLButtonElement | null;
+    const name = (target.closest('.branch-row') as HTMLElement | null)?.dataset.name;
+    const branch = all.find(b=>b.name === name);
+    if (!button || button.disabled || !branch) return;
+    const menu=button.closest<HTMLDetailsElement>(".branch-more");if(menu)menu.open=false;
+    switch(button.dataset.bAct) {
+      case "favorite": return ctx.toggleFavorite?.(branch.name);
+      case "checkout": return ctx.checkout(branch);
+      case "merge": return ctx.merge(branch);
+      case "compare": return ctx.compare(branch);
+      case "newfrom": return ctx.newFrom(branch);
+      case "delete": return ctx.remove(branch);
+    }
+  });
+  draw(); groups.scrollTop = state.scrollTop; return wrap;
+}
+
+function branchRow(b: BranchInfo, blocked: boolean, target: string, favorite = false, allowMerge = true): string {
+  const disabled = blocked ? "disabled" : "";
+  const sync=b.is_remote ? null : branchSync(b);
+  return `<div class="branch-row${b.is_current ? " current" : ""}" data-name="${esc(b.name)}">
+    <button class="favorite-button" data-b-act="favorite" aria-pressed="${favorite}" aria-label="${esc(b.name)} ${favorite ? "aus Favoriten entfernen" : "als Favorit merken"}">${favorite ? "★" : "☆"}</button>
+    <span class="dot${b.is_current ? " on" : ""}"></span>
+    <div class="branch-detail"><div class="branch-identity"><span class="bname">${esc(b.name)}</span>
+      ${b.is_current ? '<span class="chip head">Aktueller Branch</span>' : ""}
+      ${sync ? `<span class="chip sync-${sync.tone}" title="${esc(sync.detail)}">${esc(sync.label)}</span>` : ""}</div>
+      <div class="branch-meta"><span class="bsub" title="${esc(b.subject)}">${esc(b.subject || "Kein Commit")}</span>
+      <span class="bdate" title="${esc(absTime(b.timestamp))}">${esc(b.short_hash)} · ${esc(relTime(b.timestamp))}</span></div>
+      <span class="small muted">${b.upstream ? `Verfolgt ${esc(b.upstream)}` : b.is_remote ? "Remote · beim Wechsel lokal verfolgen" : "Lokal · kein Upstream"}</span></div>
+    <div class="actions">
+      ${!b.is_current ? `<button class="btn" data-b-act="checkout" ${disabled}>Wechseln</button>
+        <button class="btn" data-b-act="compare">Vergleichen</button>
+        ${allowMerge ? `<button class="btn primary" data-b-act="merge" ${disabled} title="In ${esc(target)} mergen">${icon("merge", 13)} Mergen</button>` : ""}` : ""}
+      <details class="branch-more"><summary aria-label="Weitere Aktionen für ${esc(b.name)}" aria-haspopup="menu" aria-expanded="false">${icon("more",16)}<span>Mehr</span></summary><div class="branch-more-menu" role="menu" aria-label="Aktionen für ${esc(b.name)}"><div class="branch-menu-heading">${esc(b.name)}</div>
+        <button class="btn ghost" data-b-act="newfrom" role="menuitem" ${disabled}>Neuer Branch von hier</button>
+        ${!b.is_current ? `<button class="btn danger" data-b-act="delete" role="menuitem" ${disabled}>${b.is_remote ? "Remote-Branch löschen" : "Branch löschen"}</button>` : ""}
+      </div></details>
+    </div></div>`;
 }
 
 export function renderHistory(ctx: PanelCtx): HTMLElement {
   const wrap = el("div", "panel-pad");
   const commits = ctx.history();
+  wrap.addEventListener("click", e => { if ((e.target as HTMLElement).closest("[data-all-history]")) ctx.showFileHistory?.(""); });
   const selected = ctx.selectedCommit();
   const files = ctx.commitFiles();
   const sel = commits.find((c) => c.hash === selected);
   wrap.innerHTML = `
+    ${ctx.historyPath ? `<header class="page-heading"><h1>Dateihistorie: ${esc(ctx.historyPath)}</h1><button class="btn" data-all-history>Gesamte Historie</button></header>` : ""}
     <div class="hist" style="height:calc(100vh - 120px)">
       <div class="hist-list">
         ${
@@ -430,6 +520,11 @@ export function renderHistory(ctx: PanelCtx): HTMLElement {
     const path = (target.closest(".row") as HTMLElement | null)?.dataset.path;
     if (fileDiff === "diff" && path && selected) ctx.openCommitDiff(selected, path);
   });
+  wrap.addEventListener("keydown", e => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const row = (e.target as HTMLElement).closest<HTMLElement>(".commit-row");
+    if (row?.dataset.hash) { e.preventDefault(); ctx.selectCommit(row.dataset.hash); }
+  });
   return wrap;
 }
 
@@ -438,7 +533,7 @@ function commitRow(c: CommitInfo, selected: boolean): string {
   const isHead = c.refs.some((r) => r.includes("HEAD"));
   const dotColor = isHead ? "var(--green)" : merge ? "var(--violet)" : "var(--fg-3)";
   return `
-    <div class="commit-row${selected ? " selected" : ""}" data-hash="${esc(c.hash)}">
+    <div role="button" tabindex="0" aria-label="Commit ${esc(c.short_hash)}: ${esc(c.subject)}" class="commit-row${selected ? " selected" : ""}" data-hash="${esc(c.hash)}">
       <span class="graph">
         <svg width="22" height="20" viewBox="0 0 22 20">
           <line x1="11" y1="0" x2="11" y2="20" stroke="var(--line)" stroke-width="1.5"/>

@@ -7,3 +7,5 @@ pub mod hunks;
 pub mod merge;
 pub mod model;
 pub mod verify;
+
+mod working;

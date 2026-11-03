@@ -14,9 +14,7 @@
 //! beschreiben kann (doppelte Zeilen). Deshalb ist die Engine bewusst streng
 //! und der Wächter (`verify`) prüft vor jedem stillen Auto-Merge mit git selbst.
 
-use mergecraft_core::merge::{
-    diff_blocks, merge_regions, render, split_lines, Block, Kind,
-};
+use mergecraft_core::merge::{diff_blocks, merge_regions, render, split_lines, Block, Kind};
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
@@ -146,10 +144,30 @@ fn run_corpus(cases: usize, seed: u64, duplicates: bool) -> Stats {
         write(&dir, "theirs.txt", &theirs);
 
         let (code, git_text) = git_merge_file(&dir);
-        assert!((0..200).contains(&code), "git merge-file scheiterte: {code}");
+        assert!(
+            (0..200).contains(&code),
+            "git merge-file scheiterte: {code}"
+        );
         let git_conflict = code != 0;
 
         let regions = merge_regions(&base, &ours, &theirs);
+        let projected_ours: Vec<String> = regions
+            .iter()
+            .flat_map(|r| ours[r.ours.0..r.ours.0 + r.ours.1].iter().cloned())
+            .collect();
+        let projected_theirs: Vec<String> = regions
+            .iter()
+            .flat_map(|r| theirs[r.theirs.0..r.theirs.0 + r.theirs.1].iter().cloned())
+            .collect();
+        assert_eq!(
+            projected_ours, ours,
+            "local projection case {i} seed {seed}"
+        );
+        assert_eq!(
+            projected_theirs, theirs,
+            "incoming projection case {i} seed {seed}"
+        );
+
         let my_conflict = regions.iter().any(|r| r.kind == Kind::Conflict);
         let text = render(
             &regions,
@@ -174,7 +192,8 @@ fn run_corpus(cases: usize, seed: u64, duplicates: bool) -> Stats {
                 Some(true) => st.guarded += 1,
                 other => {
                     if st.dropped.len() < 3 {
-                        st.dropped.push(format!("  Wächter lieferte {other:?}\n{case}"));
+                        st.dropped
+                            .push(format!("  Wächter lieferte {other:?}\n{case}"));
                     }
                 }
             }
@@ -185,7 +204,10 @@ fn run_corpus(cases: usize, seed: u64, duplicates: bool) -> Stats {
                 .push(format!("{case}\n  git={git_text:?}\n  mine={text:?}"));
         }
     }
-    eprintln!("{}", st.report(&format!("seed={seed:x} Duplikate={duplicates}")));
+    eprintln!(
+        "{}",
+        st.report(&format!("seed={seed:x} Duplikate={duplicates}"))
+    );
     st
 }
 
@@ -213,7 +235,10 @@ fn high_fidelity_without_duplicate_lines() {
         "Textabweichung bei sauberem Merge:\n{}",
         st.text_mismatch.join("\n")
     );
-    assert!(st.agreement() > 0.99, "Übereinstimmung ohne Duplikate zu niedrig");
+    assert!(
+        st.agreement() > 0.99,
+        "Übereinstimmung ohne Duplikate zu niedrig"
+    );
 }
 
 #[test]
@@ -262,7 +287,9 @@ fn git_hunks_as_diff_source_stay_safe() {
 
 #[test]
 fn regression_real_world_style_cases() {
-    let dir = std::env::temp_dir().join("mergecraft-diff3").join("regression");
+    let dir = std::env::temp_dir()
+        .join("mergecraft-diff3")
+        .join("regression");
     std::fs::create_dir_all(&dir).unwrap();
     let cases: Vec<(&str, &str, &str)> = vec![
         // beide Seiten fügen unterschiedliche Imports oben ein -> Konflikt
@@ -278,7 +305,11 @@ fn regression_real_world_style_cases() {
             "fn f() {\n    let x = 42;\n    let y = 2;\n}\n",
         ),
         // getrennte Blöcke -> sauber
-        ("a\nb\nc\nd\ne\nf\n", "A\nb\nc\nd\ne\nf\n", "a\nb\nc\nd\ne\nF\n"),
+        (
+            "a\nb\nc\nd\ne\nf\n",
+            "A\nb\nc\nd\ne\nf\n",
+            "a\nb\nc\nd\ne\nF\n",
+        ),
         // gleiche Löschung auf beiden Seiten -> sauber
         ("a\nb\nc\nd\n", "a\nd\n", "a\nd\n"),
         // Anhängen am Dateiende gegen Löschen der letzten Zeile -> Konflikt
@@ -304,10 +335,37 @@ fn regression_real_world_style_cases() {
                 "Fall {i}: git meldet Konflikt, wir nicht: {base:?}/{ours:?}/{theirs:?}"
             );
         } else {
-            let text = render(&regions, &b, &o, &t, &HashMap::new(), "ours", "theirs", true);
+            let text = render(
+                &regions,
+                &b,
+                &o,
+                &t,
+                &HashMap::new(),
+                "ours",
+                "theirs",
+                true,
+            );
             assert_eq!(git_text, text, "Fall {i}: Textabweichung");
         }
         // Wort-Hervorhebung darf bei sauberem Merge nichts verändern
         let _ = diff_blocks(&b, &o);
     }
+}
+
+#[test]
+fn conflict_projection_keeps_unchanged_edges_of_both_sides() {
+    let base = split_lines("a=1\nb=2\nc=3\n");
+    let ours = split_lines("a=10\nb=2\nc=30\n");
+    let theirs = split_lines("a=1\nb=20\nc=3\n");
+    let regions = merge_regions(&base, &ours, &theirs);
+    let projected_ours: Vec<String> = regions
+        .iter()
+        .flat_map(|r| ours[r.ours.0..r.ours.0 + r.ours.1].iter().cloned())
+        .collect();
+    let projected_theirs: Vec<String> = regions
+        .iter()
+        .flat_map(|r| theirs[r.theirs.0..r.theirs.0 + r.theirs.1].iter().cloned())
+        .collect();
+    assert_eq!(projected_ours, ours);
+    assert_eq!(projected_theirs, theirs);
 }

@@ -87,21 +87,27 @@ fn main() {
             commands::snapshot,
             commands::init_repo,
             commands::branches,
+            commands::tags,
+            commands::commit_info,
             commands::status,
             commands::history,
             commands::commit_files,
             commands::conflicts,
             // Diffs
             commands::file_diff,
+            commands::working_diff,
+            commands::file_history,
             commands::versions_diff,
             commands::commit_file_diff,
             commands::compare_diff,
+            commands::compare_files,
             // Merge/Konflikte
             commands::conflict_data,
             commands::save_conflict,
             commands::resolve_with_side,
             commands::standalone_data,
             commands::standalone_save,
+            commands::standalone_side,
             // Branches
             commands::checkout_branch,
             commands::create_branch,
@@ -118,6 +124,10 @@ fn main() {
             commands::stage,
             commands::unstage,
             commands::discard,
+            commands::stashes,
+            commands::rollback,
+            commands::save_stash,
+            commands::apply_stash,
             commands::commit,
             commands::git_raw,
             // System
@@ -126,31 +136,32 @@ fn main() {
             commands::set_title,
             commands::selftest_report,
         ])
-        .run(tauri::generate_context!());
+        .build(tauri::generate_context!());
 
-    // Als externes Merge-Tool zählt der Ablauf: wurde das Ergebnis geschrieben?
-    if standalone_mode {
-        match app {
-            Ok(_) => {
-                let saved = commands::SAVED.load(Ordering::SeqCst);
-                std::process::exit(if saved { 0 } else { 1 });
-            }
-            Err(e) => {
-                eprintln!("Mergecraft konnte nicht starten: {e}");
-                std::process::exit(2);
-            }
+    let app = match app {
+        Ok(app) => app,
+        Err(error) => {
+            eprintln!("Mergecraft konnte nicht starten: {error}");
+            std::process::exit(2);
         }
+    };
+    // Builder::run exits the process directly. run_return lets the external
+    // merge-tool contract distinguish a saved result from cancellation.
+    let exit_code = app.run_return(|_, _| {});
+    if standalone_mode {
+        let saved = commands::SAVED.load(Ordering::SeqCst);
+        std::process::exit(if saved { 0 } else { 1 });
     }
-    if let Err(e) = app {
-        eprintln!("Mergecraft konnte nicht starten: {e}");
-        std::process::exit(2);
-    }
+    std::process::exit(exit_code);
 }
 
 /// `--merge <lokal> <basis> <eingehend> <ergebnis> [label-lokal] [label-eingehend]`
 fn parse_standalone(args: &[String]) -> Option<StandaloneMerge> {
     let pos = args.iter().position(|a| a == "--merge")?;
-    let rest: Vec<&String> = args[pos + 1..].iter().filter(|a| !a.starts_with("--")).collect();
+    let rest: Vec<&String> = args[pos + 1..]
+        .iter()
+        .filter(|a| !a.starts_with("--"))
+        .collect();
     if rest.len() < 4 {
         eprintln!("--merge braucht 4 Dateien: lokal basis eingehend ergebnis");
         return None;

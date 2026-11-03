@@ -66,7 +66,7 @@ export class DiffView {
     const removed = d.blocks.reduce((n, x) => n + x.a_len, 0);
 
     target.innerHTML = "";
-    const wrap = el("div", "diff");
+    const wrap = el("div", `diff diff-${this.mode}`);
 
     const head = el("div", "diff-head");
     head.innerHTML = `
@@ -89,6 +89,17 @@ export class DiffView {
            <div class="l">${esc(d.b_label)}${d.b_missing ? " (fehlt)" : ""}</div>`
         : `<div class="l">${esc(d.a_label)} → ${esc(d.b_label)}</div>`;
     wrap.appendChild(labels);
+
+    head.addEventListener("click", (e) => {
+      const target2 = e.target as HTMLElement;
+      const mode = target2.dataset.mode;
+      if (mode === "split" || mode === "unified") {
+        this.mode = mode;
+        this.render();
+      } else if (target2.closest('[data-act="close"]')) {
+        this.onClose();
+      }
+    });
 
     if (d.binary) {
       wrap.appendChild(
@@ -131,16 +142,7 @@ export class DiffView {
       );
     }
 
-    head.addEventListener("click", (e) => {
-      const target2 = e.target as HTMLElement;
-      const mode = target2.dataset.mode;
-      if (mode === "split" || mode === "unified") {
-        this.mode = mode;
-        this.render();
-      } else if (target2.closest('[data-act="close"]')) {
-        this.onClose();
-      }
-    });
+
 
     target.appendChild(wrap);
   }
@@ -155,7 +157,7 @@ export class DiffView {
     const col = el("div", `dcol ${cls}`);
     const [s, e] = range;
     if (e <= s) {
-      col.appendChild(el("div", "line empty"));
+      col.appendChild(el("div", "line line-empty"));
       return col;
     }
     for (let i = s; i < e; i++) {

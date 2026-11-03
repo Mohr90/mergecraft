@@ -1,0 +1,57 @@
+# Mergecraft bedienen
+
+Mergecraft ist ein Git-Client für Linux. Die Oberfläche ist auf Deutsch, Git-Zugangsdaten und Remote-Konfiguration kommen aus deiner vorhandenen Git-Einrichtung.
+
+## Änderungen und Commit
+
+1. Öffne ein Repository und wähle **Änderungen**.
+2. Klicke auf eine Datei, um den Diff zu prüfen.
+3. Hake die gewünschten Dateien an. Der Haken bedeutet: für den Commit vorgemerkt.
+4. Gib eine Nachricht ein und wähle **Commit**. **Push** veröffentlicht anschließend die Commits.
+
+Ohne vorgemerkte Dateien bleibt „Neuer Commit“ deaktiviert. **Letzten Commit ändern (Amend)** ist eine bewusste Alternative, etwa zum Ändern der Nachricht. Damit wird der letzte Commit ersetzt; bei bereits veröffentlichten Commits ist der weitere Push von deiner Git-Konfiguration und den Remote-Regeln abhängig.
+
+**Rollback** setzt ausgewählte getrackte Dateien auf HEAD zurück und verwirft deren lokale Änderungen. Es wird dabei kein Stash angelegt. Neue, ungetrackte Dateien haben eine eigene Löschaktion.
+
+## Branches und Remote
+
+Favoriten, lokale Branches und Remote-Branches sind getrennt dargestellt. Suche und Filter bleiben beim Aktualisieren erhalten. **Vergleichen** zeigt die Unterschiede zweier Commit-Spitzen, ohne die Arbeitskopie zu ändern.
+
+Beim Wechsel zu einem Remote-Branch wird ein lokaler Tracking-Branch angelegt. Existiert dieser bereits, kannst du ihn öffnen oder per Fast-forward auf den Remote-Stand aktualisieren. Eigene lokale Commits werden bei dieser Aktualisierung nicht verworfen; offene Dateiänderungen blockieren sie. Für einen verlorenen lokalen Stand gibt es keinen automatischen Reset.
+
+**Fetch** aktualisiert die bekannten Remote-Referenzen. **Pull** übernimmt Änderungen des zugeordneten Upstreams. Fehlt diese Zuordnung, kann ein eindeutig gleichnamiger Remote-Branch nach Rückfrage verbunden werden. „Synchron“ bezieht sich auf Commits und den zuletzt bekannten Remote-Stand; lokale Dateiänderungen zählen dort nicht mit.
+
+## Mergen und Konflikte lösen
+
+Checke zuerst den Zielbranch aus. Wähle dann beim Quellbranch **Mergen**, etwa `origin/master` in deinem Feature-Branch. Direkte lokale Merges nach `main` oder `master` werden in der GUI bewusst nicht angeboten; dafür ist ein Merge Request bzw. Pull Request auf dem Server vorgesehen.
+
+Bei Konflikten zeigt der Editor **Lokal · Ergebnis · Eingehend**. Übernimm je Bereich eine Seite, beide oder bearbeite den Ergebnistext. **Auto Resolve** liefert prüfbare Vorschläge für einfache, unabhängige Änderungen und lässt mehrdeutige Fälle offen. Die Vorschläge werden erst nach Übernahme Teil der Vorschau und erst nach Speichern auf die Platte geschrieben.
+
+- **Rückgängig/Wiederholen** gilt für Entscheidungen und Texte in der aktuellen Datei.
+- **Auswahl zurücksetzen** setzt die Vorschau dieser Datei auf ihren Öffnungszustand zurück.
+- **Speichern & als gelöst markieren** speichert und führt `git add` aus.
+- Nach allen Konflikten erstellt **Merge abschließen** den Merge-Commit. Danach kannst du pushen.
+- **Merge abbrechen** ruft `git merge --abort` auf. Auch gespeicherte Auflösungen gehören zum laufenden Merge. Bereits abgeschlossene Merge-Commits werden damit nicht rückgängig gemacht. Vor dem Merge vorhandene uncommittete Änderungen können Git die Wiederherstellung erschweren.
+
+## Tastatur
+
+| Kürzel | Aktion |
+| --- | --- |
+| Strg+1 / 2 / 3 / 4 / 5 | Änderungen / Branches / Historie / Konsole / Tags |
+| Strg+P | Branch-Suche |
+| Strg+R oder F5 | Aktualisieren |
+| Strg+Enter | Commit aus dem Nachrichtenfeld |
+| Alt+↑ / Alt+↓ | Vorheriger / nächster Konflikt |
+| Alt+← / Alt+→ / Alt+B | Lokal / eingehend / beide übernehmen |
+| Alt+Enter | Speichern und als gelöst markieren |
+| Strg+Z / Strg+Umschalt+Z | Rückgängig / Wiederholen im Merge-Editor |
+| Esc | Menü oder Ansicht schließen; ungespeicherte Merge-Texte werden geschützt |
+
+## Diagnose
+
+```bash
+mergecraft --diag /pfad/zum/repo
+mergecraft --diag /pfad/zum/repo src/main.rs
+```
+
+Die Diagnose kann Dateinamen, Commit-Texte und Remote-Adressen enthalten. Prüfe die Ausgabe, bevor du sie in einem öffentlichen Issue teilst.

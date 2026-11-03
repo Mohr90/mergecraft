@@ -1,6 +1,25 @@
-target/
-dist/
-node_modules/
-src-tauri/icons/android/
-src-tauri/icons/ios/
+# Dependencies and build outputs
+/target/
+/dist/
+/node_modules/
+/artifacts/
+/src-tauri/target/
+/src-tauri/gen/
+/src-tauri/icons/android/
+/src-tauri/icons/ios/
+
+# Test output and local tooling
+/playwright-report/
+/test-results/
+/coverage/
 *.log
+.DS_Store
+.idea/
+.vscode/
+
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+*.pem
+*.key

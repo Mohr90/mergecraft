@@ -1,13 +1,13 @@
 // Branch-Auswahl als Popover mit Suche: wechseln, anlegen, mergen,
-// umbenennen, löschen - mit Tastatursteuerung.
+// löschen - mit Tastatursteuerung.
 
 import type { BranchInfo } from "./api";
 import { el, esc, fuzzy, icon, markHits, relTime, toast } from "./ui";
 
 export interface BranchMenuActions {
+  allowMerge?: boolean;
   onCheckout: (b: BranchInfo) => void;
   onMerge: (b: BranchInfo) => void;
-  onRename: (b: BranchInfo) => void;
   onDelete: (b: BranchInfo) => void;
   onNewFrom: (b: BranchInfo | null) => void;
   onCompare: (b: BranchInfo) => void;
@@ -23,16 +23,16 @@ export function openBranchMenu(anchor: HTMLElement, branches: BranchInfo[], act:
   document.querySelector(".popover")?.remove();
   const pop = el("div", "popover");
   pop.innerHTML = `
-    <div class="search">${icon("search", 15)}<input type="text" placeholder="Branch suchen – lokal und remote" autocomplete="off" /></div>
+    <div class="search">${icon("search", 15)}<input type="text" aria-label="Branch suchen" placeholder="Branch suchen – lokal und remote" autocomplete="off" /></div>
     <div class="list"></div>
     <footer>
       <button class="btn" data-act="new">${icon("plus", 14)} Neuer Branch</button>
-      <span class="hint"><span class="kbd">↑↓</span> wählen · <span class="kbd">Enter</span> wechseln · <span class="kbd">Esc</span> schließen</span>
+      <span class="hint"><span class="kbd">↑↓</span> wählen · <span class="kbd">Enter</span> wechseln · ${act.allowMerge === false ? "" : '<span class="kbd">Alt+Enter</span> mergen · '}<span class="kbd">Esc</span> schließen</span>
     </footer>`;
   document.body.appendChild(pop);
 
   const rect = anchor.getBoundingClientRect();
-  const width = 470;
+  const width = 620;
   const left = Math.min(rect.left, window.innerWidth - width - 12);
   pop.style.left = `${Math.max(8, left)}px`;
   pop.style.top = `${rect.bottom + 6}px`;
@@ -98,18 +98,25 @@ export function openBranchMenu(anchor: HTMLElement, branches: BranchInfo[], act:
           <span class="actions">
             ${
               b.is_current
-                ? ""
-                : `<button class="mini" data-act="checkout" data-idx="${idx}">wechseln</button>
-                   <button class="mini primary" data-act="merge" data-idx="${idx}" title="In den aktuellen Branch mergen">${icon("merge", 12)} mergen</button>`
+                ? `<span class="chip head" title="Dieser Branch ist ausgecheckt">ausgecheckt</span>`
+                : `<button class="mini" data-act="checkout" data-idx="${idx}"
+                     title="Diesen Branch auschecken – Zeile anklicken genügt">${icon("right", 12)} wechseln</button>`
             }
-            <button class="mini" data-act="newfrom" data-idx="${idx}" title="Neuen Branch hier starten">${icon("plus", 12)}</button>
+            ${
+              b.is_current || act.allowMerge === false
+                ? ""
+                : `<button class="mini quiet" data-act="merge" data-idx="${idx}"
+                     title="„${esc(b.name)}“ in den aktuellen Branch mergen (nicht auschecken)">${icon("merge", 12)}</button>`
+            }
+            ${!b.is_current ? `<button class="mini quiet" data-act="compare" data-idx="${idx}" title="Mit aktuellem Branch vergleichen">Diff</button>` : ""}
+            <button class="mini quiet" data-act="newfrom" data-idx="${idx}"
+              title="Neuen Branch von „${esc(b.name)}“ aus starten">${icon("plus", 12)}</button>
             ${
               b.is_remote
-                ? `<button class="mini danger" data-act="delete-remote" data-idx="${idx}" title="Remote-Branch löschen">${icon("trash", 12)}</button>`
+                ? `<button class="mini quiet danger" data-act="delete-remote" data-idx="${idx}" title="Remote-Branch löschen">${icon("trash", 12)}</button>`
                 : b.is_current
                   ? ""
-                  : `<button class="mini" data-act="rename" data-idx="${idx}" title="Umbenennen">${icon("pencil", 12)}</button>
-                     <button class="mini danger" data-act="delete" data-idx="${idx}" title="Löschen">${icon("trash", 12)}</button>`
+                  : `<button class="mini quiet danger" data-act="delete" data-idx="${idx}" title="Löschen">${icon("trash", 12)}</button>`
             }
           </span>
         </div>`;
@@ -128,7 +135,7 @@ export function openBranchMenu(anchor: HTMLElement, branches: BranchInfo[], act:
     if (!pop.contains(e.target as Node)) close();
   };
 
-  const activate = (idx: number, mode: "checkout" | "merge" | "rename" | "delete" | "delete-remote" | "newfrom") => {
+  const activate = (idx: number, mode: "checkout" | "merge" | "delete" | "delete-remote" | "newfrom" | "compare") => {
     const item = items[idx];
     if (!item) return;
     const b = item.branch;
@@ -137,10 +144,11 @@ export function openBranchMenu(anchor: HTMLElement, branches: BranchInfo[], act:
         act.onCheckout(b);
         break;
       case "merge":
+        if(act.allowMerge === false) return;
         act.onMerge(b);
         break;
-      case "rename":
-        act.onRename(b);
+      case "compare":
+        act.onCompare(b);
         break;
       case "delete":
         act.onDelete(b);
@@ -195,7 +203,7 @@ export function openBranchMenu(anchor: HTMLElement, branches: BranchInfo[], act:
       cursor = Math.max(0, cursor - 1);
       build();
       list.querySelector(".pop-item.sel")?.scrollIntoView({ block: "nearest" });
-    } else if (e.key === "Enter") {
+    } else if (e.key === "Enter" && !e.altKey) {
       e.preventDefault();
       const item = items[cursor];
       if (!item) return;
@@ -204,9 +212,22 @@ export function openBranchMenu(anchor: HTMLElement, branches: BranchInfo[], act:
         return;
       }
       activate(cursor, "checkout");
+    } else if (e.altKey && e.key === "Enter") {
+      // Alt+Enter bleibt von der Texteingabe getrennt.
+      const item = items[cursor];
+      if (item && !item.branch.is_current && act.allowMerge !== false) {
+        e.preventDefault();
+        activate(cursor, "merge");
+      }
     } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
       close();
     }
+  });
+
+  pop.addEventListener("keydown", e => {
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
   });
 
   document.addEventListener("mousedown", onOutside, true);

@@ -2,8 +2,19 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Mergecraft</title>
+    <script>
+      // Apply appearance before the first paint, including when storage is unavailable.
+      (() => {
+        let theme;
+        try { theme = localStorage.getItem("mergecraft-theme"); } catch {}
+        document.documentElement.dataset.theme = theme === "light" || theme === "dark"
+          ? theme : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      })();
+    </script>
     <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/apple.css" />
   </head>
   <body>
     <div id="app"></div>

@@ -48,9 +48,28 @@ export interface BranchInfo {
   short_hash: string;
   timestamp: number;
   subject: string;
+  tracking_known?: boolean;
   ahead: number;
   behind: number;
   checkout_name: string;
+}
+
+export interface StashInfo {
+  oid: string;
+  selector: string;
+  message: string;
+  timestamp: number;
+}
+
+export interface TagInfo {
+  name: string;
+  full_name: string;
+  commit: string | null;
+  short_hash: string;
+  is_annotated: boolean;
+  timestamp: number;
+  subject: string;
+  author: string;
 }
 
 export type FileState =
@@ -146,6 +165,7 @@ export interface ConflictData {
   ours_label: string;
   theirs_label: string;
   result_text: string;
+  working_modified?: boolean;
   guarded: boolean;
   highlight_ours: Highlights;
   highlight_theirs: Highlights;
@@ -157,6 +177,8 @@ export interface DiffBlock {
   b_start: number;
   b_len: number;
 }
+
+export type ChangeArea = "staged" | "work" | "untracked";
 
 export interface FileDiff {
   path: string;
@@ -197,12 +219,16 @@ export const api = {
   initRepo: (path: string) => call<RepoSnapshot>("init_repo", { path }),
 
   branches: () => call<BranchInfo[]>("branches"),
+  tags: () => call<TagInfo[]>("tags"),
+  commitInfo: (revision: string) => call<CommitInfo>("commit_info", { revision }),
   status: () => call<RepoStatus>("status"),
   history: (limit = 300, all = false, path?: string) =>
     call<CommitInfo[]>("history", { limit, all, path: path ?? null }),
   commitFiles: (hash: string) => call<FileChange[]>("commit_files", { hash }),
   conflicts: () => call<ConflictFile[]>("conflicts"),
 
+  workingDiff: (path: string, area: ChangeArea) => call<FileDiff>("working_diff", {path, area}),
+  fileHistory: (path: string) => call<CommitInfo[]>("file_history", {path}),
   fileDiff: (revA: string, revB: string, path: string, labelA?: string, labelB?: string) =>
     call<FileDiff>("file_diff", {
       rev_a: revA,
@@ -227,6 +253,8 @@ export const api = {
     }),
   commitFileDiff: (hash: string, path: string) =>
     call<FileDiff>("commit_file_diff", { hash, path }),
+  compareFiles: (revA: string, revB: string) =>
+    call<FileChange[]>("compare_files", { rev_a: revA, rev_b: revB }),
   compareDiff: (revA: string, revB: string, path: string) =>
     call<FileDiff>("compare_diff", { rev_a: revA, rev_b: revB, path }),
 
@@ -236,14 +264,18 @@ export const api = {
   resolveWithSide: (path: string, side: "ours" | "theirs") =>
     call<CommandResult>("resolve_with_side", { path, side }),
   standaloneData: () => call<ConflictData | null>("standalone_data"),
+  standaloneSide: (side: "ours" | "theirs") => call<CommandResult>("standalone_side", { side }),
   standaloneSave: (text: string) => call<CommandResult>("standalone_save", { text }),
 
-  checkout: (name: string, opts?: { localName?: string; force?: boolean; track?: boolean }) =>
+  checkout: (name: string, opts?: { localName?: string; force?: boolean; track?: boolean; updateFromRemote?: boolean; expectedLocal?: string; expectedRemote?: string }) =>
     call<CommandResult>("checkout_branch", {
       name,
       local_name: opts?.localName ?? null,
       force: opts?.force ?? false,
       track: opts?.track ?? false,
+      update_from_remote: opts?.updateFromRemote ?? false,
+      expected_local: opts?.expectedLocal ?? null,
+      expected_remote: opts?.expectedRemote ?? null,
     }),
   createBranch: (name: string, start: string | null, checkout = true) =>
     call<CommandResult>("create_branch", { name, start, checkout }),
@@ -259,9 +291,13 @@ export const api = {
 
   fetchRemote: (remote: string | null = null) =>
     call<CommandResult>("fetch_remote", { remote }),
-  pull: () => call<CommandResult>("pull", {}),
+  pull: (expectedBranch: string, trackSameName = false) => call<CommandResult>("pull", { expected_branch: expectedBranch, track_same_name: trackSameName }),
   push: (setUpstream = false) => call<CommandResult>("push", { set_upstream: setUpstream }),
 
+  stashes: () => call<StashInfo[]>("stashes"),
+  rollback: (paths: string[], expectedHead: string) => call<CommandResult>("rollback", {paths, expected_head: expectedHead}),
+  saveStash: (message: string) => call<CommandResult>("save_stash", {message}),
+  applyStash: (oid: string) => call<MergeOutcome>("apply_stash", {oid}),
   stage: (paths: string[]) => call<CommandResult>("stage", { paths }),
   unstage: (paths: string[]) => call<CommandResult>("unstage", { paths }),
   discard: (paths: string[]) => call<CommandResult>("discard", { paths }),

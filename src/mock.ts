@@ -95,7 +95,7 @@ const HL_THEIRS: Highlights = {
 const j = (lines: string[]) => lines.join("\n") + "\n";
 
 const snapshot = (): RepoSnapshot => ({
-  root: "/home/smohr/develop/demo-repo",
+  root: "/home/demo/projects/demo-repo",
   name: "demo-repo",
   head: "9f2c41ab77de00112233445566778899aabbccdd",
   head_branch: "main",
@@ -103,7 +103,7 @@ const snapshot = (): RepoSnapshot => ({
   rebasing: false,
   cherry_picking: false,
   merge_head: "d41d8cd98f00b204e9800998ecf8427e",
-  remote_url: "git@git.n4group.eu:team/demo-repo.git",
+  remote_url: "git@example.com:team/demo-repo.git",
   remote_name: "origin",
 });
 
@@ -117,6 +117,7 @@ function branches(): BranchInfo[] {
     short_hash: "9f2c41a",
     timestamp: Date.now() / 1000 - 3600,
     subject: "Zwischenstand",
+    tracking_known: true,
     ahead: 0,
     behind: 0,
     checkout_name: name,
@@ -177,13 +178,13 @@ const status = (): RepoStatus => {
 
 function history(): CommitInfo[] {
   const now = Date.now() / 1000;
-  const mk = (i: number, subject: string, refs: string[], author = "smohr"): CommitInfo => {
+  const mk = (i: number, subject: string, refs: string[], author = "Alex"): CommitInfo => {
     const hex = (0x9f2c41ab + i * 7919).toString(16).padStart(8, "0");
     return {
       hash: (hex + "112233445566778899aabbccdd").slice(0, 40),
       short_hash: hex.slice(0, 7),
       author,
-      email: `${author}@n4group.eu`,
+      email: `${author}@example.com`,
       timestamp: now - i * 4200,
       parents: i === 0 ? [] : [(0x9f2c41ab + (i - 1) * 7919).toString(16).padStart(8, "0") + "112233445566778899aabbccdd"],
       refs,
@@ -265,13 +266,25 @@ export async function mockInvoke(cmd: string, args?: any): Promise<any> {
     case "snapshot":
       return snapshot();
     case "recent_repos":
-      return ["/home/smohr/develop/demo-repo", "/home/smohr/develop/n4kit"];
+      return ["/home/demo/projects/demo-repo", "/home/demo/projects/another-repo"];
     case "branches":
       return branches();
+    case "stashes":
+      return [];
+    case "tags":
+      return [
+        {name:"v2.4.0",full_name:"refs/tags/v2.4.0",commit:"9f2c41ab77de00112233445566778899aabbccdd",short_hash:"9f2c41a",is_annotated:true,timestamp:Date.now()/1000-86400,subject:"Release 2.4 · Stabilität und Merge-Editor",author:"Release Team"},
+        {name:"v2.3.0",full_name:"refs/tags/v2.3.0",commit:"d41d8cd98f00b204e9800998ecf8427e0000000000",short_hash:"d41d8cd",is_annotated:true,timestamp:Date.now()/1000-864000,subject:"Release 2.3",author:"Release Team"},
+        {name:"snapshot/ui",full_name:"refs/tags/snapshot/ui",commit:"aa77b21000000000000000000000000000000000",short_hash:"aa77b21",is_annotated:false,timestamp:Date.now()/1000-3600,subject:"Sidebar und Branch-Suche",author:"Test"},
+      ];
+    case "commit_info":
+      return {...history()[0],hash:args.revision,short_hash:args.revision.slice(0,7),refs:["tag: v2.4.0"]};
     case "status":
       return status();
     case "history":
+    case "file_history":
       return history();
+    case "compare_files":
     case "commit_files":
       return [
         { status: "M", path: "src/main.rs" },
@@ -285,6 +298,10 @@ export async function mockInvoke(cmd: string, args?: any): Promise<any> {
         { path: "src/config.rs", code: "AA", has_base: false },
         { path: "docs/setup.md", code: "UD", has_base: true },
       ];
+    case "working_diff": {
+      const diff = fileDiff(args.path);
+      return {...diff,a_label:args.area === "staged" ? "Letzter Commit" : "Für Commit vorgemerkt",b_label:args.area === "staged" ? "Für Commit vorgemerkt" : "Arbeitskopie"};
+    }
     case "file_diff":
     case "versions_diff":
     case "commit_file_diff":
@@ -293,7 +310,7 @@ export async function mockInvoke(cmd: string, args?: any): Promise<any> {
     case "conflict_data": {
       const data: ConflictData = {
         path: args.path,
-        root: "/home/smohr/develop/demo-repo",
+        root: "/home/demo/projects/demo-repo",
         base: { label: "Basis", text: j(B), exists: true, lines: B.length, binary: false },
         ours: { label: "Lokal", text: j(OURS), exists: true, lines: OURS.length, binary: false },
         theirs: { label: "Eingehend", text: j(THEIRS), exists: true, lines: THEIRS.length, binary: false },
@@ -316,7 +333,7 @@ export async function mockInvoke(cmd: string, args?: any): Promise<any> {
     case "standalone_data":
       return null;
     case "pick_folder":
-      return "/home/smohr/develop";
+      return "/home/demo/projects";
     case "merge_branch":
       return {
         ok: false,

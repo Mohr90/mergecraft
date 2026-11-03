@@ -99,41 +99,6 @@ pub fn diff_blocks(base: &[String], side: &[String]) -> Vec<Block> {
     out
 }
 
-/// Bildet jeden Basisindex (0..=base_len) auf den passenden Index der Seite ab.
-/// Positionen innerhalb einer Änderung haben kein Gegenstück und werden
-/// monoton aufgefüllt, damit Aufrufer nie aus dem Bereich laufen.
-fn mapping(side_len: usize, base_len: usize, blocks: &[Block]) -> Vec<usize> {
-    let mut map = vec![usize::MAX; base_len + 1];
-    let mut bi = 0usize;
-    let mut si = 0usize;
-    for b in blocks {
-        let equal_run = (b.a_start.saturating_sub(bi)).min(b.b_start.saturating_sub(si));
-        for k in 0..equal_run {
-            if bi + k <= base_len {
-                map[bi + k] = si + k;
-            }
-        }
-        if b.a_start <= base_len {
-            map[b.a_start] = b.b_start;
-        }
-        bi = b.a_start + b.a_len;
-        si = b.b_start + b.b_len;
-    }
-    for k in 0..base_len.saturating_sub(bi) {
-        map[bi + k] = si + k;
-    }
-    map[base_len] = side_len;
-    let mut last = 0usize;
-    for v in map.iter_mut() {
-        if *v == usize::MAX {
-            *v = last;
-        } else {
-            last = *v;
-        }
-    }
-    map
-}
-
 #[derive(Debug, Default, Clone)]
 struct Group {
     base_start: usize,
@@ -141,18 +106,6 @@ struct Group {
     /// (base_start, base_len, side_start, side_len) aller Blöcke dieser Seite
     ours: Vec<(usize, usize, usize, usize)>,
     theirs: Vec<(usize, usize, usize, usize)>,
-}
-
-fn hull_of(blocks: &[(usize, usize, usize, usize)]) -> Option<(usize, usize)> {
-    let mut it = blocks.iter();
-    let first = it.next()?;
-    let mut s = first.2;
-    let mut e = first.2 + first.3;
-    for b in it {
-        s = s.min(b.2);
-        e = e.max(b.2 + b.3);
-    }
-    Some((s, e - s))
 }
 
 /// Beide Seiten haben *dieselbe* Änderung am *selben* Basisbereich gemacht:
@@ -195,9 +148,6 @@ pub fn merge_regions_with(
     bo: &[Block],
     bt: &[Block],
 ) -> Vec<Region> {
-    let mo = mapping(ours.len(), base.len(), bo);
-    let mt = mapping(theirs.len(), base.len(), bt);
-
     let mut items: Vec<(usize, usize, bool, usize, usize)> = Vec::new();
     for b in bo {
         items.push((b.a_start, b.a_len, false, b.b_start, b.b_len));
@@ -209,7 +159,10 @@ pub fn merge_regions_with(
 
     let mut groups: Vec<Group> = Vec::new();
     for &(bs, bl, is_theirs, ss, sl) in &items {
-        let attach = groups.last().map(|g| interferes(g, bs, bl)).unwrap_or(false);
+        let attach = groups
+            .last()
+            .map(|g| interferes(g, bs, bl))
+            .unwrap_or(false);
         if attach {
             let g = groups.last_mut().unwrap();
             g.base_start = g.base_start.min(bs);
@@ -236,19 +189,27 @@ pub fn merge_regions_with(
 
     let mut regions: Vec<Region> = Vec::new();
     let mut pos = 0usize;
+    let mut ours_pos = 0usize;
+    let mut theirs_pos = 0usize;
     for g in &groups {
         if g.base_start > pos {
             let len = g.base_start - pos;
             regions.push(Region {
                 kind: Kind::Unchanged,
                 base: (pos, len),
-                ours: (mo[pos], mo[pos + len] - mo[pos]),
-                theirs: (mt[pos], mt[pos + len] - mt[pos]),
+                ours: (ours_pos, len),
+                theirs: (theirs_pos, len),
             });
+            ours_pos += len;
+            theirs_pos += len;
         }
         let len = g.base_end - g.base_start;
-        let (os, ol) = hull_of(&g.ours).unwrap_or((mo[g.base_start], len));
-        let (ts, tl) = hull_of(&g.theirs).unwrap_or((mt[g.base_start], len));
+        // Every side spans the entire shared base interval, including unchanged
+        // edges. Sequential cursors also avoid assigning boundary insertions twice.
+        let ol = len - g.ours.iter().map(|b| b.1).sum::<usize>()
+            + g.ours.iter().map(|b| b.3).sum::<usize>();
+        let tl = len - g.theirs.iter().map(|b| b.1).sum::<usize>()
+            + g.theirs.iter().map(|b| b.3).sum::<usize>();
         let kind = match (g.ours.is_empty(), g.theirs.is_empty()) {
             (false, true) => Kind::OursOnly,
             (true, false) => Kind::TheirsOnly,
@@ -264,18 +225,20 @@ pub fn merge_regions_with(
         regions.push(Region {
             kind,
             base: (g.base_start, len),
-            ours: (os, ol),
-            theirs: (ts, tl),
+            ours: (ours_pos, ol),
+            theirs: (theirs_pos, tl),
         });
         pos = g.base_end;
+        ours_pos += ol;
+        theirs_pos += tl;
     }
     if pos < base.len() {
         let len = base.len() - pos;
         regions.push(Region {
             kind: Kind::Unchanged,
             base: (pos, len),
-            ours: (mo[pos], mo[pos + len] - mo[pos]),
-            theirs: (mt[pos], mt[pos + len] - mt[pos]),
+            ours: (ours_pos, len),
+            theirs: (theirs_pos, len),
         });
     }
     regions
@@ -293,11 +256,7 @@ pub struct WordSpan {
 /// Zeichenweise geänderter Anteil einer Zeile (grob, nur zur Bewertung).
 fn changed_ratio(a: &str, b: &str) -> f64 {
     let max = a.chars().count().max(b.chars().count()).max(1);
-    let common_prefix = a
-        .chars()
-        .zip(b.chars())
-        .take_while(|(x, y)| x == y)
-        .count();
+    let common_prefix = a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count();
     let common_suffix = a
         .chars()
         .rev()
@@ -423,7 +382,10 @@ pub fn pair_highlights(
     b_lines: &[String],
     a_start: usize,
     b_start: usize,
-) -> (BTreeMap<usize, Vec<WordSpan>>, BTreeMap<usize, Vec<WordSpan>>) {
+) -> (
+    BTreeMap<usize, Vec<WordSpan>>,
+    BTreeMap<usize, Vec<WordSpan>>,
+) {
     let mut ha = BTreeMap::new();
     let mut hb = BTreeMap::new();
     if a_lines.len() != b_lines.len() {
@@ -703,14 +665,8 @@ mod tests {
         let b_line = "    map.insert(\"b\", 22);";
         let (a, b) = word_spans(a_line, b_line).expect("Hervorhebung erwartet");
         // Die Textstücke müssen die Zeile exakt wieder ergeben
-        assert_eq!(
-            a.iter().map(|s| s.text.clone()).collect::<String>(),
-            a_line
-        );
-        assert_eq!(
-            b.iter().map(|s| s.text.clone()).collect::<String>(),
-            b_line
-        );
+        assert_eq!(a.iter().map(|s| s.text.clone()).collect::<String>(), a_line);
+        assert_eq!(b.iter().map(|s| s.text.clone()).collect::<String>(), b_line);
         // der unveränderte Teil darf nicht markiert sein
         assert!(
             !a.iter()

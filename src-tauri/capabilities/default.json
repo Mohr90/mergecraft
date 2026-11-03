@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Rechte des Mergecraft-Hauptfensters",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "core:window:allow-close", "core:window:allow-destroy"]
 }

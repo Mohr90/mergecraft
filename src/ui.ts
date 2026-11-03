@@ -9,6 +9,10 @@ export function esc(s: string): string {
 }
 
 const ICONS: Record<string, string> = {
+  info: '<circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 4.5v.2"/>',
+  more: '<circle cx="3" cy="8" r=".8"/><circle cx="8" cy="8" r=".8"/><circle cx="13" cy="8" r=".8"/>',
+  sun: '<circle cx="8" cy="8" r="3"/><path d="M8 1v1M8 14v1M1 8h1M14 8h1M3 3l1 1M12 12l1 1M3 13l1-1M12 4l1-1"/>',
+  moon: '<path d="M13.5 9.2A5.8 5.8 0 0 1 6.8 2.5a5.8 5.8 0 1 0 6.7 6.7z"/>',
   logo: '<path d="M4 2v8a3 3 0 0 0 3 3h5"/><circle cx="4" cy="2.5" r="1.6"/><circle cx="12" cy="13" r="1.6"/><path d="M12 2.5v4.2A3 3 0 0 1 9 9.5H7.5"/>',
   changes: '<path d="M4 2.5h5l3 3V13.5H4z"/><path d="M6.5 8.5h4M6.5 11h2.5"/>',
   branch: '<circle cx="5" cy="3.5" r="1.7"/><circle cx="5" cy="12.5" r="1.7"/><circle cx="11.5" cy="6.5" r="1.7"/><path d="M5 5.2v5.6M5 8.5h3a3.5 3.5 0 0 0 3.5-2"/>',
@@ -124,10 +128,22 @@ export function markHits(text: string, hits: number[]): string {
 export function toast(message: string, kind: "ok" | "err" | "info" = "ok", ms?: number) {
   const host = document.querySelector(".toasts");
   if (!host) return;
-  const node = el("div", `toast ${kind === "ok" ? "" : kind}`, esc(message));
+  [...host.querySelectorAll<HTMLElement>(".toast")].filter(n=>n.dataset.message===message&&n.dataset.kind===kind).forEach(n=>n.remove());
+  while(host.children.length>=3)host.firstElementChild?.remove();
+  const title=kind==="err" ? "Aktion fehlgeschlagen" : kind==="info" ? "Hinweis" : "Erledigt";
+  const node=el("div",`toast ${kind}`,`<span class="toast-symbol">${icon(kind==="err"?"warning":kind==="info"?"info":"check",16)}</span><div class="toast-copy"><strong>${title}</strong><div class="toast-message">${esc(message)}</div></div><button class="icon-btn toast-close" aria-label="Benachrichtigung schließen" title="Schließen">${icon("close",13)}</button>`);
+  node.dataset.message=message;node.dataset.kind=kind;
+  node.setAttribute("role",kind==="err"?"alert":"status");
   host.appendChild(node);
-  const life = ms ?? (kind === "err" ? 9000 : 4500);
-  setTimeout(() => node.remove(), life);
+  let remaining=ms ?? (kind==="err"?0:4500),started=0,timer:ReturnType<typeof setTimeout>|undefined;
+  const dismiss=()=>{clearTimeout(timer);node.remove();};
+  const pause=()=>{if(timer!==undefined){clearTimeout(timer);timer=undefined;remaining=Math.max(0,remaining-(Date.now()-started));}};
+  const resume=()=>{if(remaining>0&&timer===undefined){started=Date.now();timer=setTimeout(dismiss,remaining);}};
+  node.querySelector("button")!.addEventListener("click",dismiss);
+  node.addEventListener("mouseenter",pause);node.addEventListener("focusin",pause);
+  node.addEventListener("mouseleave",()=>{if(!node.matches(":focus-within"))resume();});
+  node.addEventListener("focusout",()=>queueMicrotask(()=>{if(!node.matches(":hover,:focus-within"))resume();}));
+  resume();
 }
 
 // ------------------------------------------------------------------ Dialoge
@@ -138,48 +154,29 @@ interface ModalButton<T> {
   primary?: boolean;
 }
 
-export function modal<T>(
-  title: string,
-  detail: string,
-  buttons: ModalButton<T>[],
-): Promise<T | null> {
-  return new Promise((resolve) => {
-    const host = document.querySelector(".modal-host") as HTMLElement;
-    if (!host) return resolve(null);
-    host.innerHTML = `
-      <div class="modal-back">
-        <div class="modal">
-          <h3>${esc(title)}</h3>
-          ${detail ? `<div class="detail">${esc(detail)}</div>` : ""}
-          <div class="actions">
-            ${buttons
-              .map(
-                (b, i) =>
-                  `<button class="btn ${b.primary ? "primary" : ""}" data-i="${i}">${esc(b.label)}</button>`,
-              )
-              .join("")}
-          </div>
-        </div>
-      </div>`;
-    const finish = (v: T | null) => {
-      host.innerHTML = "";
-      resolve(v);
-    };
-    host.addEventListener("click", (e) => {
-      const raw = (e.target as HTMLElement).dataset.i;
-      if (raw === undefined) return;
-      finish(buttons[Number(raw)].value);
+export function showDialog(content: string): { dialog: HTMLDialogElement; close: () => void } | null {
+  const host = document.querySelector(".modal-host");
+  if (!host || host.querySelector('dialog[open]')) return null;
+  const previous = document.activeElement as HTMLElement | null;
+  host.innerHTML = `<dialog class="modal" aria-labelledby="dialog-title">${content}</dialog>`;
+  const dialog = host.querySelector('dialog')!;
+  dialog.showModal();
+  return { dialog, close: () => { dialog.close(); dialog.remove(); if (previous?.isConnected) previous.focus(); } };
+}
+
+export function modal<T>(title: string, detail: string, buttons: ModalButton<T>[]): Promise<T | null> {
+  return new Promise(resolve => {
+    const view = showDialog(`<h2 id="dialog-title">${esc(title)}</h2>
+      ${detail ? `<p class="detail">${esc(detail)}</p>` : ""}
+      <div class="actions">${buttons.map((b,i)=>`<button class="btn ${b.primary ? "primary" : ""}" data-i="${i}">${esc(b.label)}</button>`).join("")}</div>`);
+    if (!view) return resolve(null);
+    let done = false;
+    const finish = (value: T | null) => { if (done) return; done = true; view.close(); resolve(value); };
+    view.dialog.addEventListener("click", e => {
+      const button = (e.target as HTMLElement).closest('[data-i]') as HTMLElement | null;
+      if (button) finish(buttons[Number(button.dataset.i)].value);
     });
-    host.querySelector(".modal-back")?.addEventListener("click", (e) => {
-      if (e.target === host.querySelector(".modal-back")) finish(null);
-    });
-    document.addEventListener(
-      "keydown",
-      (e) => {
-        if (e.key === "Escape") finish(null);
-      },
-      { once: true },
-    );
+    view.dialog.addEventListener("cancel", e => { e.preventDefault(); finish(null); });
   });
 }
 
@@ -187,45 +184,25 @@ export function confirmDialog(title: string, detail = "", okLabel = "Ok"): Promi
   return modal(title, detail, [
     { label: "Abbrechen", value: false },
     { label: okLabel, value: true, primary: true },
-  ]).then((v) => v === true);
+  ]).then(v => v === true);
 }
 
-export function askText(
-  title: string,
-  label: string,
-  initial = "",
-  okLabel = "Ok",
-): Promise<string | null> {
-  return new Promise((resolve) => {
-    const host = document.querySelector(".modal-host") as HTMLElement;
-    if (!host) return resolve(null);
-    host.innerHTML = `
-      <div class="modal-back">
-        <div class="modal">
-          <h3>${esc(title)}</h3>
-          <div class="detail">${esc(label)}</div>
-          <input type="text" class="m-input" value="${esc(initial)}" />
-          <div class="actions">
-            <button class="btn" data-v="cancel">Abbrechen</button>
-            <button class="btn primary" data-v="ok">${esc(okLabel)}</button>
-          </div>
-        </div>
-      </div>`;
-    const input = host.querySelector("input") as HTMLInputElement;
-    input.focus();
-    input.select();
-    const finish = (v: string | null) => {
-      host.innerHTML = "";
-      resolve(v);
-    };
-    host.addEventListener("click", (e) => {
-      const v = (e.target as HTMLElement).dataset.v;
-      if (v === "ok") finish(input.value.trim() || null);
-      else if (v === "cancel") finish(null);
+export function askText(title: string, label: string, initial = "", okLabel = "Ok"): Promise<string | null> {
+  return new Promise(resolve => {
+    const view = showDialog(`<h2 id="dialog-title">${esc(title)}</h2><label for="dialog-input" class="detail">${esc(label)}</label>
+      <input id="dialog-input" type="text" class="m-input" value="${esc(initial)}">
+      <div class="actions"><button class="btn" data-v="cancel">Abbrechen</button><button class="btn primary" data-v="ok">${esc(okLabel)}</button></div>`);
+    if (!view) return resolve(null);
+    const input = view.dialog.querySelector('input')!;
+    let done = false;
+    const finish = (value: string | null) => { if(done) return; done = true; view.close(); resolve(value); };
+    view.dialog.addEventListener("click", e => {
+      const value = (e.target as HTMLElement).closest('[data-v]')?.getAttribute('data-v');
+      if(value === 'ok') finish(input.value.trim() || null);
+      if(value === 'cancel') finish(null);
     });
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") finish(input.value.trim() || null);
-      if (e.key === "Escape") finish(null);
-    });
+    view.dialog.addEventListener("cancel", e => { e.preventDefault(); finish(null); });
+    input.addEventListener('keydown', e => { if(e.key === 'Enter') { e.preventDefault(); finish(input.value.trim() || null); } });
+    input.focus(); input.select();
   });
 }
