@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Mergecraft</title>
+  <rect width="64" height="64" rx="15" fill="#0066e6"/>
+  <g transform="translate(16 16) scale(2)" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 2v8a3 3 0 0 0 3 3h5"/>
+    <circle cx="4" cy="2.5" r="1.6"/>
+    <circle cx="12" cy="13" r="1.6"/>
+    <path d="M12 2.5v4.2A3 3 0 0 1 9 9.5H7.5"/>
+  </g>
+</svg>

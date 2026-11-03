@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src-tauri/icons/128x128.png" width="72" height="72" alt="Mergecraft icon">
+  <img src="docs/logo.svg" width="72" height="72" alt="Mergecraft icon">
 </p>
 
 <h1 align="center">Mergecraft</h1>
