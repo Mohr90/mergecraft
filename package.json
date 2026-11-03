@@ -6,11 +6,12 @@
   "scripts": {
     "dev:web": "vite",
     "build:web": "vite build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && node scripts/check-i18n.mjs",
     "test:browser": "node scripts/test-browser.mjs",
     "dev": "tauri dev",
     "build": "tauri build",
-    "test:browser:running": "node tests/browser.cjs"
+    "test:browser:running": "node tests/browser.cjs",
+    "test:i18n:running": "node tests/i18n.cjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1"

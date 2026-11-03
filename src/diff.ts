@@ -1,3 +1,4 @@
+import { t, h, m, localizeText } from "./i18n";
 // Diff-Ansicht: nebeneinander oder vereint, mit Zeilennummern und
 // wortweiser Hervorhebung (wie im WebStorm-Diff).
 
@@ -40,12 +41,14 @@ function segments(diff: FileDiff, a: string[], b: string[]): Segment[] {
 export class DiffView {
   mode: DiffMode = "split";
   private diff!: FileDiff;
+  private builtinLabels=false;
   private root: HTMLElement | null = null;
 
   constructor(private onClose: () => void) {}
 
-  set(diff: FileDiff, mode: DiffMode = "split") {
+  set(diff: FileDiff, mode: DiffMode = "split", builtinLabels=false) {
     this.diff = diff;
+    this.builtinLabels=builtinLabels;
     this.mode = mode;
     if (this.root) this.render();
   }
@@ -53,6 +56,14 @@ export class DiffView {
   mount(target: HTMLElement) {
     this.root = target;
     this.render();
+  }
+
+  relocalize(): void {
+    const body=this.root?.querySelector('.diff-body');
+    const top=body?.scrollTop??0,left=body?.scrollLeft??0;
+    this.render();
+    const next=this.root?.querySelector('.diff-body');
+    if(next){next.scrollTop=top;next.scrollLeft=left;}
   }
 
   private render() {
@@ -69,7 +80,7 @@ export class DiffView {
     const wrap = el("div", `diff diff-${this.mode}`);
 
     const head = el("div", "diff-head");
-    head.innerHTML = `
+    head.innerHTML = h`
       <div class="file"><span class="name">${esc(baseName(d.path))}</span>
         <span class="dir small muted">${esc(dirName(d.path))}</span></div>
       <span class="badge add">+${added}</span>
@@ -85,9 +96,9 @@ export class DiffView {
     const labels = el("div", "diff-labels");
     labels.innerHTML =
       this.mode === "split"
-        ? `<div class="l">${esc(d.a_label)}${d.a_missing ? " (fehlt)" : ""}</div>
-           <div class="l">${esc(d.b_label)}${d.b_missing ? " (fehlt)" : ""}</div>`
-        : `<div class="l">${esc(d.a_label)} → ${esc(d.b_label)}</div>`;
+        ? `<div class="l">${esc(this.builtinLabels ? localizeText(d.a_label) : d.a_label)}${d.a_missing ? t(" (fehlt)") : ""}</div>
+           <div class="l">${esc(this.builtinLabels ? localizeText(d.b_label) : d.b_label)}${d.b_missing ? t(" (fehlt)") : ""}</div>`
+        : `<div class="l">${esc(this.builtinLabels ? localizeText(d.a_label) : d.a_label)} → ${esc(this.builtinLabels ? localizeText(d.b_label) : d.b_label)}</div>`;
     wrap.appendChild(labels);
 
     head.addEventListener("click", (e) => {
@@ -103,7 +114,7 @@ export class DiffView {
 
     if (d.binary) {
       wrap.appendChild(
-        el("div", "banner warn", `${icon("warning", 14)}<span>Binärdatei – kein Textvergleich möglich.</span>`),
+        el("div", "banner warn", h`${icon("warning", 14)}<span>Binärdatei – kein Textvergleich möglich.</span>`),
       );
       target.appendChild(wrap);
       return;
@@ -138,7 +149,7 @@ export class DiffView {
     wrap.appendChild(body);
     if (drawn > LIMIT) {
       wrap.appendChild(
-        el("div", "banner", `Sehr großer Vergleich – nach ${LIMIT} Zeilen abgeschnitten.`),
+        el("div", "banner", m`Sehr großer Vergleich – nach ${LIMIT} Zeilen abgeschnitten.`),
       );
     }
 

@@ -1,3 +1,4 @@
+import { h, m, t, getLocale, localizeText } from "./i18n";
 // Kleine Helfer: Icons, Formatierung, Toasts, Dialoge, Fuzzy-Suche.
 
 export function esc(s: string): string {
@@ -63,22 +64,17 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 /** "vor 3 Std." / "gestern" / Datum */
 export function relTime(ts: number): string {
   if (!ts) return "";
-  const diff = Date.now() / 1000 - ts;
-  if (diff < 60) return "gerade";
-  if (diff < 3600) return `vor ${Math.floor(diff / 60)} Min.`;
-  if (diff < 86400) return `vor ${Math.floor(diff / 3600)} Std.`;
-  if (diff < 172800) return "gestern";
-  if (diff < 2592000) return `vor ${Math.floor(diff / 86400)} Tagen`;
-  const d = new Date(ts * 1000);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}`;
+  const seconds=(ts*1000-Date.now())/1000;
+  if(Math.abs(seconds)<60)return t("gerade");
+  const relative=new Intl.RelativeTimeFormat(getLocale(),{numeric:'auto'});
+  if(Math.abs(seconds)<3600)return relative.format(Math.trunc(seconds/60),'minute');
+  if(Math.abs(seconds)<86400)return relative.format(Math.trunc(seconds/3600),'hour');
+  if(Math.abs(seconds)<2592000)return relative.format(Math.trunc(seconds/86400),'day');
+  return new Intl.DateTimeFormat(getLocale(),{dateStyle:'medium'}).format(new Date(ts*1000));
 }
 
 export function absTime(ts: number): string {
-  if (!ts) return "";
-  const d = new Date(ts * 1000);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return ts ? new Intl.DateTimeFormat(getLocale(),{dateStyle:'short',timeStyle:'short'}).format(new Date(ts*1000)) : "";
 }
 
 export function splitPath(p: string): { dir: string; base: string } {
@@ -130,8 +126,8 @@ export function toast(message: string, kind: "ok" | "err" | "info" = "ok", ms?: 
   if (!host) return;
   [...host.querySelectorAll<HTMLElement>(".toast")].filter(n=>n.dataset.message===message&&n.dataset.kind===kind).forEach(n=>n.remove());
   while(host.children.length>=3)host.firstElementChild?.remove();
-  const title=kind==="err" ? "Aktion fehlgeschlagen" : kind==="info" ? "Hinweis" : "Erledigt";
-  const node=el("div",`toast ${kind}`,`<span class="toast-symbol">${icon(kind==="err"?"warning":kind==="info"?"info":"check",16)}</span><div class="toast-copy"><strong>${title}</strong><div class="toast-message">${esc(message)}</div></div><button class="icon-btn toast-close" aria-label="Benachrichtigung schließen" title="Schließen">${icon("close",13)}</button>`);
+  const title=kind==="err" ? t("Aktion fehlgeschlagen") : kind==="info" ? t("Hinweis") : t("Erledigt");
+  const node=el("div",`toast ${kind}`,h`<span class="toast-symbol">${icon(kind==="err"?"warning":kind==="info"?"info":"check",16)}</span><div class="toast-copy"><strong>${title}</strong><div class="toast-message">${esc(message)}</div></div><button class="icon-btn toast-close" aria-label="Benachrichtigung schließen" title="Schließen">${icon("close",13)}</button>`);
   node.dataset.message=message;node.dataset.kind=kind;
   node.setAttribute("role",kind==="err"?"alert":"status");
   host.appendChild(node);
@@ -182,14 +178,14 @@ export function modal<T>(title: string, detail: string, buttons: ModalButton<T>[
 
 export function confirmDialog(title: string, detail = "", okLabel = "Ok"): Promise<boolean> {
   return modal(title, detail, [
-    { label: "Abbrechen", value: false },
+    { label: t("Abbrechen"), value: false },
     { label: okLabel, value: true, primary: true },
   ]).then(v => v === true);
 }
 
 export function askText(title: string, label: string, initial = "", okLabel = "Ok"): Promise<string | null> {
   return new Promise(resolve => {
-    const view = showDialog(`<h2 id="dialog-title">${esc(title)}</h2><label for="dialog-input" class="detail">${esc(label)}</label>
+    const view = showDialog(h`<h2 id="dialog-title">${esc(title)}</h2><label for="dialog-input" class="detail">${esc(label)}</label>
       <input id="dialog-input" type="text" class="m-input" value="${esc(initial)}">
       <div class="actions"><button class="btn" data-v="cancel">Abbrechen</button><button class="btn primary" data-v="ok">${esc(okLabel)}</button></div>`);
     if (!view) return resolve(null);
@@ -204,5 +200,17 @@ export function askText(title: string, label: string, initial = "", okLabel = "O
     view.dialog.addEventListener("cancel", e => { e.preventDefault(); finish(null); });
     input.addEventListener('keydown', e => { if(e.key === 'Enter') { e.preventDefault(); finish(input.value.trim() || null); } });
     input.focus(); input.select();
+  });
+}
+
+export function relocalizeToasts(): void {
+  document.querySelectorAll<HTMLElement>('.toast').forEach(node=>{
+    const kind=node.dataset.kind;
+    const title=node.querySelector('strong');
+    if(title)title.textContent=kind==='err'?t('Aktion fehlgeschlagen'):kind==='info'?t('Hinweis'):t('Erledigt');
+    const message=node.querySelector('.toast-message');
+    if(message){message.textContent=localizeText(message.textContent??'');node.dataset.message=message.textContent;}
+    const close=node.querySelector('button');
+    close?.setAttribute('aria-label',t('Benachrichtigung schließen'));close?.setAttribute('title',t('Schließen'));
   });
 }

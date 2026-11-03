@@ -1,3 +1,4 @@
+import { h, t } from "./i18n";
 import type { RepoSnapshot, TagInfo } from "./api";
 import { absTime, el, esc, fuzzy, icon, relTime } from "./ui";
 
@@ -21,7 +22,7 @@ export function renderTags(ctx: TagContext, state: TagViewState): HTMLElement {
   const all = ctx.tags();
   const snap = ctx.snapshot();
   const blocked = !!(snap?.merging || snap?.rebasing || snap?.cherry_picking);
-  wrap.innerHTML = `
+  wrap.innerHTML = h`
     <div class="branch-toolbar">
       <header class="page-heading"><div><h1>Tags</h1><p class="muted">Releases und markierte Stände deines Repositories.</p></div></header>
       <div class="branch-tools">
@@ -45,17 +46,17 @@ export function renderTags(ctx: TagContext, state: TagViewState): HTMLElement {
       && (state.scope === "all" || t.is_annotated === (state.scope === "annotated")))
       .sort((a,b) => state.sort === "name" ? a.name.localeCompare(b.name,undefined,{numeric:true}) : b.timestamp-a.timestamp);
     const filtered = !!query || state.scope !== "all";
-    wrap.querySelector('.tag-filter-status')!.innerHTML = `<span>${tags.length} von ${all.length} Tags</span>${filtered ? '<button class="mini" data-tag-reset>Filter zurücksetzen</button>' : ''}`;
-    list.innerHTML = tags.length ? `<div class="rows">${tags.map(tag => `
+    wrap.querySelector('.tag-filter-status')!.innerHTML = h`<span>${tags.length} von ${all.length} Tags</span>${filtered ? h`<button class="mini" data-tag-reset>Filter zurücksetzen</button>` : ''}`;
+    list.innerHTML = tags.length ? `<div class="rows">${tags.map(tag => h`
       <div class="branch-row tag-row" data-tag-name="${esc(tag.name)}">
         <span class="tag-symbol">${icon("tag",16)}</span>
-        <div class="branch-detail"><div class="branch-identity"><span class="bname">${esc(tag.name)}</span>${tag.is_annotated ? '<span class="chip">Annotiert</span>' : ''}</div>
-          <div class="branch-meta"><span class="bsub" title="${esc(tag.subject)}">${esc(tag.subject || "Keine Beschreibung")}</span><span class="bdate" title="${esc(absTime(tag.timestamp))}">${esc(tag.short_hash)} · ${esc(relTime(tag.timestamp))}</span></div>
-          <span class="small muted">${tag.commit ? esc(tag.author) : "Zeigt auf kein Commit · nur Anzeige möglich"}</span></div>
+        <div class="branch-detail"><div class="branch-identity"><span class="bname">${esc(tag.name)}</span>${tag.is_annotated ? h`<span class="chip">Annotiert</span>` : ''}</div>
+          <div class="branch-meta"><span class="bsub" title="${esc(tag.subject)}">${esc(tag.subject || t("Keine Beschreibung"))}</span><span class="bdate" title="${esc(absTime(tag.timestamp))}">${esc(tag.short_hash)} · ${esc(relTime(tag.timestamp))}</span></div>
+          <span class="small muted">${tag.commit ? esc(tag.author) : t("Zeigt auf kein Commit · nur Anzeige möglich")}</span></div>
         <div class="actions"><button class="btn" data-tag-act="commit" ${!tag.commit ? "disabled" : ""}>Commit ansehen</button>
           <button class="btn" data-tag-act="compare" ${!tag.commit || !snap?.head ? "disabled" : ""}>Vergleichen</button>
           <button class="btn tag-new-branch" data-tag-act="branch" ${!tag.commit || blocked ? "disabled" : ""}>${icon("plus",12)} Branch von hier</button></div>
-      </div>`).join("")}</div>` : `<div class="empty">${icon("tag",28)}<b>${all.length ? "Keine passenden Tags" : "Noch keine Tags"}</b><span>${all.length ? "Passe Suche oder Filter an." : "In diesem Repository sind noch keine Tags vorhanden. Mit Fetch kannst du Remote-Referenzen aktualisieren."}</span></div>`;
+      </div>`).join("")}</div>` : `<div class="empty">${icon("tag",28)}<b>${all.length ? t("Keine passenden Tags") : t("Noch keine Tags")}</b><span>${all.length ? t("Passe Suche oder Filter an.") : t("In diesem Repository sind noch keine Tags vorhanden. Mit Fetch kannst du Remote-Referenzen aktualisieren.")}</span></div>`;
   };
   const changed = () => {state.scrollTop=0;draw();list.scrollTop=0;};
   input.addEventListener('input',changed);scope.addEventListener('change',changed);sort.addEventListener('change',changed);

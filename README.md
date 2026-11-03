@@ -34,7 +34,13 @@
 | **Tags & history** | Browse tags and commits, inspect changed files, compare revisions and follow a file's history. |
 | **Remotes** | Fetch, pull and push using your existing Git configuration and credential helpers. See unpublished commits and incoming changes. |
 
-The interface is currently in **German**, with light and dark appearances and keyboard shortcuts. Mergecraft uses the real Git CLI, so it works with GitHub, GitLab and other Git remotes. It does not require a hosting-service API token and does not provide a built-in merge-request or pipeline dashboard.
+The interface supports **German and English**. Switch languages using the labeled flag buttons beside the appearance controls; your choice is saved locally. Without a saved preference, Mergecraft uses a supported system language and otherwise falls back to English. Light/dark appearance is a separate preference. Mergecraft uses the real Git CLI, so it works with GitHub, GitLab and other Git remotes. It does not require a hosting-service API token and does not provide a built-in merge-request or pipeline dashboard.
+
+## German or English
+
+![English workspace with German and English language controls beside the appearance switch](docs/screenshots/mergecraft-english-branches.png)
+
+Switch immediately between **Deutsch** and **English** without reopening the repository. Drafts, filters, staging selections and merge-editor text/history stay in place. Dates and app-generated messages follow the selected language; your repository content and raw Git output are preserved.
 
 ## Resolve conflicts with context
 
@@ -112,7 +118,7 @@ git config --global mergetool.mergecraft.trustExitCode true
 
 ## Built with
 
-**Rust + Tauri 2** for the native app and Git integration; **TypeScript + Vite** for the interface. The Rust core has randomized differential tests against `git merge-file`, regression tests and real-repository workflow tests. Browser tests cover the UI and mocked application flows; native fixtures exercise the actual Tauri/Git bridge.
+**Rust + Tauri 2** for the native app and Git integration; **TypeScript + Vite** for the interface. UI messages use local translation catalogs; switching languages preserves commit drafts, Git staging, filters and unsaved merge edits. See the [i18n contributor guide](docs/i18n.md). The Rust core has randomized differential tests against `git merge-file`, regression tests and real-repository workflow tests. Browser tests cover the UI and mocked application flows; native fixtures exercise the actual Tauri/Git bridge.
 
 ```text
 core/        Git integration, three-way merge engine and regression tests

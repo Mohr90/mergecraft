@@ -23,11 +23,14 @@ try {
     await delay(100);
   }
   if (!ready) throw new Error('The browser test server did not start.');
-  test = spawn(process.execPath, ['tests/browser.cjs'], { stdio: 'inherit', env: { ...process.env, MERGECRAFT_TEST_URL: url } });
-  process.exitCode = await new Promise((resolve, reject) => {
-    test.once('error', reject);
-    test.once('exit', code => resolve(code ?? 1));
-  });
+  for (const file of ['tests/browser.cjs','tests/i18n.cjs']) {
+    test = spawn(process.execPath, [file], { stdio: 'inherit', env: { ...process.env, MERGECRAFT_TEST_URL: url } });
+    const code = await new Promise((resolve, reject) => {
+      test.once('error', reject);
+      test.once('exit', code => resolve(code ?? 1));
+    });
+    if(code!==0){process.exitCode=code;break;}
+  }
 } finally {
   stop();
 }

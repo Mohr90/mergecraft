@@ -50,7 +50,7 @@
     assert(document.querySelector('[data-sync-state="ok"]'),'published branch not shown synchronized');
     await invoke('git_raw',{args:['commit','--allow-empty','-m','native pending push']});
     click('[data-act="refresh"]');await until(()=>!document.querySelector('.shell.busy')&&document.querySelector('[data-sync-state="pending"]'));
-    assert(document.querySelector('[data-sync-state="pending"]').textContent.includes('ungepushter'),'local commit not shown pending');
+    assert(document.querySelector('[data-sync-state="pending"]').textContent.includes(document.documentElement.lang==='de'?'ungepushter':'unpushed'),'local commit not shown pending');
     click('[data-act="push"]');await until(()=>!document.querySelector('.shell.busy')&&document.querySelector('[data-sync-state="ok"]'));
     log.push('PASS local commit shown unpushed and successful real push updates synchronization status');
 
