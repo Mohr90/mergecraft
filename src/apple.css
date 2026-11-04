@@ -609,11 +609,5 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .about-mark { display:grid; place-items:center; width:60px; height:60px; border-radius:15px; background:var(--accent); color:white; }
 .about-brand h2 { margin:0 0 4px; font-size:24px; letter-spacing:-.5px; }
 .about-brand p { margin:0; font-size:13px; color:var(--fg-3); }
-.update-state { display:flex; align-items:flex-start; gap:12px; padding:18px; border:1px solid var(--line-soft); border-radius:12px; background:var(--bg-2); }
-.update-state-icon { color:var(--accent); padding-top:1px; flex:none; }
-.update-state strong { font-size:14px; }
-.update-state p { font-size:13px; color:var(--fg-2); line-height:1.55; margin:6px 0 0; }
-.update-auto { display:flex; align-items:center; gap:8px; min-height:32px; font-size:13px; margin-top:18px; }
-.update-privacy { font-size:12px; line-height:1.5; color:var(--fg-3); margin:4px 0 20px; }
-.update-actions { flex-wrap:wrap; }
+.version-status { font-size:13px; color:var(--fg-2); line-height:1.5; margin:0 0 24px; }
 @media(max-width:1000px) { .rail .app-info-button { justify-content:center; padding:6px; } .rail .app-info-button span { display:none; } }

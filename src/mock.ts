@@ -261,8 +261,8 @@ function fileDiff(path: string): FileDiff {
 export async function mockInvoke(cmd: string, args?: any): Promise<any> {
   await new Promise((r) => setTimeout(r, 4));
   switch (cmd) {
-    case "check_for_updates": return {current:"0.3.0",latest:"v0.3.0",available:false,install_kind:"package",can_install:false,can_download:false};
-    case "install_update": case "open_releases": case "open_update_download": return null;
+    case "check_for_updates": return {current:"0.3.1",latest:"v0.3.1",available:false};
+    case "open_project": case "start_selftest": return null;
     case "open_repo":
     case "init_repo":
     case "snapshot":

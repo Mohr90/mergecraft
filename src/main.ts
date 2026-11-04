@@ -1325,5 +1325,5 @@ class App implements PanelCtx {
 const root = document.getElementById("app");
 if (!root) throw new Error("#app fehlt");
 const app = new App(root);
-void app.boot();
+void app.boot().then(() => api.startSelftest()).catch(error => console.error(error));
 (window as any).mergecraft = app;

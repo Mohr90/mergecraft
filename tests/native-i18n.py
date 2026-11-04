@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory(prefix='mergecraft-i18n-',ignore_cleanup_errors
         except subprocess.TimeoutExpired:
             os.killpg(process.pid,signal.SIGTERM)
             stdout,stderr=process.communicate(timeout=5)
-            raise AssertionError(stderr)
+            raise AssertionError(f"Native startup timeout\nstdout: {stdout}\nstderr: {stderr}\nreport: {report.read_text() if report.exists() else 'missing'}")
         notes=report.read_text() if report.exists() else ''
         assert process.returncode==0 and 'PASS' in notes and 'FAIL' not in notes,(notes,stderr)
         assert file.read_bytes()==before_file,'language test modified the working file'
