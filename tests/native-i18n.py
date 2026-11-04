@@ -1,10 +1,10 @@
 """Exercise native language switching/restart against a disposable real Git conflict."""
 from pathlib import Path
 import os
-import signal
 import subprocess
 import sys
 import tempfile
+from native_process import run_native
 
 binary=str(Path(sys.argv[1]).resolve())
 script=Path(__file__).with_suffix('.js').resolve()
@@ -34,16 +34,10 @@ with tempfile.TemporaryDirectory(prefix='mergecraft-i18n-',ignore_cleanup_errors
         report=root/f'report-{restart}.txt'
         test_script=root/f'test-{restart}.js'
         test_script.write_text(f'window.__MERGECRAFT_I18N_RESTART__ = {str(restart).lower()};\n'+script.read_text())
-        env=dict(os.environ,GDK_BACKEND='x11',MERGECRAFT_SELFTEST=str(test_script),MERGECRAFT_SELFTEST_OUT=str(report),XDG_CONFIG_HOME=str(root/'config'),XDG_DATA_HOME=str(root/'data'),XDG_CACHE_HOME=str(root/'cache'))
-        process=subprocess.Popen(['xvfb-run','-a',binary,str(repo)],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
-        try:
-            stdout,stderr=process.communicate(timeout=30)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid,signal.SIGTERM)
-            stdout,stderr=process.communicate(timeout=5)
-            raise AssertionError(f"Native startup timeout\nstdout: {stdout}\nstderr: {stderr}\nreport: {report.read_text() if report.exists() else 'missing'}")
+        env=dict(os.environ,GDK_BACKEND='x11',XDG_CURRENT_DESKTOP='GNOME',MERGECRAFT_SELFTEST=str(test_script),MERGECRAFT_SELFTEST_OUT=str(report),XDG_CONFIG_HOME=str(root/'config'),XDG_DATA_HOME=str(root/'data'),XDG_CACHE_HOME=str(root/'cache'))
+        code,stdout,stderr=run_native([binary,str(repo)],env,root/f'process-{restart}')
         notes=report.read_text() if report.exists() else ''
-        assert process.returncode==0 and 'PASS' in notes and 'FAIL' not in notes,(notes,stderr)
+        assert code==0 and 'PASS' in notes and 'FAIL' not in notes,(notes,stderr)
         assert file.read_bytes()==before_file,'language test modified the working file'
         assert git('ls-files','--stage')==before_index,'language test modified index stages'
         assert git('rev-parse','HEAD')==before_head,'language test modified HEAD'
