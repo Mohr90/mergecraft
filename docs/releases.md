@@ -4,7 +4,7 @@
 
 Mergecraft 0.3.0 is built for Linux x86_64. The CI build uses Ubuntu 24.04 and WebKitGTK 4.1. Other distributions are not yet verified. Install the `.deb` from the [latest release](https://github.com/Mohr90/mergecraft/releases/latest) with your system package manager. It declares native library dependencies.
 
-For a user installation, build locally and run `packaging/install-local.sh`, or place the release executable `mergecraft-linux-x86_64` at `~/.local/bin/mergecraft` and make it executable. The executable still needs the GTK/WebKitGTK libraries declared by the Debian package; it is not an AppImage. Verify its checksum against `SHA256SUMS.txt` before installing it.
+For a user installation, build locally and run `packaging/install.sh`, or place the release executable `mergecraft-linux-x86_64` at `~/.local/bin/mergecraft` and make it executable. The executable still needs the GTK/WebKitGTK libraries declared by the Debian package; it is not an AppImage. Verify its checksum against `SHA256SUMS.txt` before installing it.
 
 Avoid keeping both `/usr/bin/mergecraft` and `~/.local/bin/mergecraft`: the user installation may shadow the package installation. Run `command -v mergecraft` to check which one starts.
 
