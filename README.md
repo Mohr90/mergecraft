@@ -70,7 +70,7 @@ Mergecraft currently targets Linux with GTK 3 and WebKitGTK 4.1. Windows and mac
 Download the `.deb` package from [Releases](https://github.com/Mohr90/mergecraft/releases), then install it on a compatible Debian/Ubuntu system:
 
 ```bash
-sudo apt install ./Mergecraft_0.2.0_amd64.deb
+sudo apt install ./Mergecraft_0.3.0_amd64.deb
 mergecraft /path/to/repository
 ```
 
@@ -115,6 +115,10 @@ git config --global mergetool.mergecraft.cmd \
   'mergecraft --merge "$LOCAL" "$BASE" "$REMOTE" "$MERGED"'
 git config --global mergetool.mergecraft.trustExitCode true
 ```
+
+## Updates
+
+Open **Mergecraft 0.3.0** below the language controls to view the installed version, check for updates or read release notes. Startup checks are optional and run at most once a day. User installations in `~/.local/bin/mergecraft` support verified, atomic updates; system installations use the Debian package manager. No automatic restart or Git changes are performed. See the [release and update guide](docs/releases.md).
 
 ## Built with
 

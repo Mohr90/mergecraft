@@ -7,6 +7,7 @@
 
 mod commands;
 mod diag;
+mod updates;
 
 use commands::{AppState, StandaloneMerge};
 use std::path::PathBuf;
@@ -18,6 +19,11 @@ fn main() {
 
     if args.iter().any(|a| a == "--help" || a == "-h") {
         print_help();
+        return;
+    }
+
+    if args.iter().any(|a| a == "--version" || a == "-V") {
+        println!("Mergecraft {}", env!("CARGO_PKG_VERSION"));
         return;
     }
 
@@ -131,6 +137,10 @@ fn main() {
             commands::commit,
             commands::git_raw,
             // System
+            updates::check_for_updates,
+            updates::install_update,
+            updates::open_update_download,
+            updates::open_releases,
             commands::pick_folder,
             commands::open_path,
             commands::set_title,
