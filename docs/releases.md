@@ -31,3 +31,7 @@ To return to an earlier version, close Mergecraft, download that release and ins
 5. Check the published downloads and smoke-test the About window. No signing secrets or external service accounts are needed for this channel.
 
 The workflow can also be started manually on a branch to test packaging without publishing. Failed workflows leave no public partial release; a failed upload may leave a draft to inspect. Tags and released files must not be moved or silently overwritten. Fix a shipped issue in a new patch release.
+
+### Retrying an unpublished tag
+
+If a CI environment issue stops a release before publication, fix the workflow on `main`, then run **Release → Run workflow** on `main` with the existing version tag in the `tag` input. The workflow checks out that exact immutable tag, reruns all quality gates and publishes its artifacts. Leave `tag` empty for a build-only run. Do not move an existing tag to work around a runner problem. Native Xvfb tests use software rendering to avoid WebKit compositor startup hangs in headless environments; sandbox protections remain enabled.
