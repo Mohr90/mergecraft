@@ -639,3 +639,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @media(max-width:768px) { .merge-workspace { flex-direction:column; } .merge-files { width:100%; max-height:100px; border-right:0; } .merge-width { display:none; } }
 
 .merge .merge-head { position:relative; z-index:20; overflow:visible; }
+
+/* Preserve code and paragraph boundaries in merge preview dialogs. */
+.modal .detail { white-space:pre-wrap; overflow-wrap:anywhere; max-height:50vh; overflow:auto; }

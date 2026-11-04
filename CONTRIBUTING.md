@@ -47,6 +47,8 @@ Recreate the README screenshots with synthetic data:
 MERGECRAFT_SCREENSHOT_DIR="$PWD/docs/screenshots" npm run test:browser
 ```
 
+The screenshot run also captures English workspaces and the v0.4.0 merge tour (`tests/merge-demo.cjs`). The tour includes the safe preview, a same-line proposal, manual resolution, three files, merge completion and a pending push. All data is synthetic. Set `MERGECRAFT_DEMO_GERMAN_DIR` to an output directory to capture a German copy of the tour. `CHROMIUM_PATH` can select an installed Chromium binary.
+
 ## Native workflow tests
 
 The fixtures refuse to overwrite an existing directory. Always use a fresh disposable location and separate XDG directories; never run them against your actual project.
