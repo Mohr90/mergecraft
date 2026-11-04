@@ -1,37 +1,24 @@
-# Releases and updates
+# Releases and version information
 
 ## Installing
 
-Mergecraft 0.3.0 is built for Linux x86_64. The CI build uses Ubuntu 24.04 and WebKitGTK 4.1. Other distributions are not yet verified. Install the `.deb` from the [latest release](https://github.com/Mohr90/mergecraft/releases/latest) with your system package manager. It declares native library dependencies.
+Mergecraft targets Linux x86_64. Release builds use Ubuntu 24.04, GTK 3 and WebKitGTK 4.1. Other distributions are not yet verified. Install the `.deb` from the [GitHub project](https://github.com/Mohr90/mergecraft) using your package manager.
 
-For a user installation, build locally and run `packaging/install.sh`, or place the release executable `mergecraft-linux-x86_64` at `~/.local/bin/mergecraft` and make it executable. The executable still needs the GTK/WebKitGTK libraries declared by the Debian package; it is not an AppImage. Verify its checksum against `SHA256SUMS.txt` before installing it.
+For a user installation, build locally and run `packaging/install.sh`. Release executables still need the native libraries declared by the Debian package. Check downloads against `SHA256SUMS.txt` before installing manually.
 
-Avoid keeping both `/usr/bin/mergecraft` and `~/.local/bin/mergecraft`: the user installation may shadow the package installation. Run `command -v mergecraft` to check which one starts.
+Avoid parallel installations at `/usr/bin/mergecraft` and `~/.local/bin/mergecraft`: the user installation may shadow the package installation. `command -v mergecraft` shows the active path.
 
-## In-app updates
+## Version information in the app
 
-Click the version below the language controls. The About window shows the running version, update status, release notes and an automatic-check preference.
+The footer always displays the installed version. Click it to see whether a newer stable version is available and open the GitHub project. The app does not download, install or restart anything. The dialog contains no release notes or updater settings.
 
-- Startup checks are enabled by default, can be disabled, and contact the public GitHub Releases API at most once per 24 hours (per local app profile/version). Manual checks bypass that interval. Nothing is sent from repositories; GitHub receives a normal HTTPS request, including the app version and network address.
-- Only newer stable semantic versions are offered. Drafts, prereleases, downgrades and malformed versions are excluded.
-- For **Linux x86_64 user installations exactly at `~/.local/bin/mergecraft`**, choose **Install update**. The app downloads the executable into the same directory, limits its size, verifies the asset size, SHA-256 digest supplied by GitHub and ELF architecture, then replaces the executable with one atomic rename. Failed downloads and failed verification leave the existing installation in place. Symlinks, development binaries and system paths are not replaced.
-- For **system/package installations**, choose **Download update** and install the `.deb` with your package manager. Administrative authentication stays with the package manager.
-- The running app remains open after installation. Finish your work, close it and reopen it to use the new version. Commit drafts and unsaved merge text are not force-closed.
-- Asset SHA-256 checks detect incomplete/corrupt downloads against GitHub's HTTPS metadata. They are **not independent cryptographic publisher signatures**. Protect the GitHub account and release permissions. Signed AppImage update channels are a possible later addition.
-- Versions before 0.3.0 need a manual update once; they do not contain the updater.
+A background check at startup contacts the public GitHub Releases API at most once per 24 hours per profile/version. Opening the dialog checks when no result is known or a previous check failed. No repository data is transmitted; GitHub receives an HTTPS request including the app version and network address. Drafts, prereleases and older versions are not offered as new versions. The status is informational: updates are installed manually from GitHub.
 
-To return to an earlier version, close Mergecraft, download that release and install it manually using the same installation method. The updater never automatically downgrades.
+## Publishing
 
-## Publishing a release
+1. Keep the version in `package.json`, both package-lock root fields, both Cargo manifests, `Cargo.lock` and `src-tauri/tauri.conf.json` consistent; add the dated changelog entry.
+2. Test and merge the feature branch through a pull request. `node scripts/check-release.mjs` validates release metadata.
+3. Tag the tested main commit with its version and push the tag. The Release workflow runs Rust, browser and native tests, builds the Debian package and publishes the package, standalone executable and SHA-256 checksums after every check succeeds.
+4. Verify the public assets and smoke-test the published executable.
 
-1. Work on a feature branch and run the relevant tests. Keep `package.json`, both package-lock version fields, `core/Cargo.toml`, `src-tauri/Cargo.toml`, `Cargo.lock` and `src-tauri/tauri.conf.json` in sync.
-2. Add dated release notes to `CHANGELOG.md`. `node scripts/check-release.mjs` validates versions and notes.
-3. Merge the tested change into `main`, create a version tag (for example `v0.3.0`) and push it.
-4. `.github/workflows/release.yml` validates the tag, runs Rust/browser/native tests and builds the Debian package. It uploads the package, standalone executable and `SHA256SUMS.txt` to a draft release, then publishes it only after all uploads succeed.
-5. Check the published downloads and smoke-test the About window. No signing secrets or external service accounts are needed for this channel.
-
-The workflow can also be started manually on a branch to test packaging without publishing. Failed workflows leave no public partial release; a failed upload may leave a draft to inspect. Tags and released files must not be moved or silently overwritten. Fix a shipped issue in a new patch release.
-
-### Retrying an unpublished tag
-
-If a CI environment issue stops a release before publication, fix the workflow on `main`, then run **Release → Run workflow** on `main` with the existing version tag in the `tag` input. The workflow checks out that exact immutable tag, reruns all quality gates and publishes its artifacts. Leave `tag` empty for a build-only run. Do not move an existing tag to work around a runner problem. Native Xvfb tests use software rendering to avoid WebKit compositor startup hangs in headless environments; sandbox protections remain enabled.
+An empty manual-dispatch tag builds without publishing. To retry an unpublished tag after a CI orchestration fix, run the workflow from main and supply the existing tag. The workflow checks out the immutable tag and repeats all tests. Do not move existing tags or overwrite published assets. Native tests start after the frontend reports readiness and use software rendering and their own D-Bus session inside Xvfb on headless runners.

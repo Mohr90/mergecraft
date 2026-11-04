@@ -1072,6 +1072,17 @@ pub fn set_title(window: tauri::Window, title: String) -> Result<(), String> {
     window.set_title(&title).map_err(|e| e.to_string())
 }
 
+/// Start only after the frontend has finished booting, independent of runner speed.
+#[tauri::command]
+pub fn start_selftest(window: tauri::WebviewWindow) -> Result<(), String> {
+    if let Some(file) = std::env::var_os("MERGECRAFT_SELFTEST") {
+        eprintln!("SELFTEST: frontend ready; injecting test script");
+        let script = std::fs::read_to_string(file).map_err(|e| e.to_string())?;
+        window.eval(&script).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// Selbsttest: nimmt das Ergebnis eines injizierten Skripts entgegen.
 /// Der Pfad kommt aus MERGECRAFT_SELFTEST_OUT.
 #[tauri::command(rename_all = "snake_case")]

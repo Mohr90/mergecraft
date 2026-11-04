@@ -220,9 +220,8 @@ export interface MergeOutcome {
 export const api = {
   inTauri,
   checkForUpdates: () => call<import("./updates").UpdateInfo>("check_for_updates"),
-  installUpdate: (expected: string) => call<void>("install_update", { expected }),
-  openUpdateDownload: () => call<void>("open_update_download"),
-  openReleases: () => call<void>("open_releases"),
+  openProject: () => call<void>("open_project"),
+  startSelftest: () => inTauri ? call<void>("start_selftest") : Promise.resolve(),
   openRepo: (path: string) => call<RepoSnapshot>("open_repo", { path }),
   recentRepos: () => call<string[]>("recent_repos"),
   snapshot: () => call<RepoSnapshot>("snapshot"),

@@ -23,3 +23,5 @@
 !.env.example
 *.pem
 *.key
+
+/tests/__pycache__/

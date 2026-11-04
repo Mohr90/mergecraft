@@ -56,36 +56,6 @@ fn main() {
 
     let app = tauri::Builder::default()
         .manage(state)
-        .setup(|app| {
-            // Selbsttest: Skript aus MERGECRAFT_SELFTEST in die Oberfläche
-            // injizieren (Ergebnis über den Befehl selftest_report).
-            // Nötig, weil sich das Fenster auf Wayland nicht abfotografieren lässt.
-            if let Some(file) = std::env::var("MERGECRAFT_SELFTEST").ok() {
-                let handle = app.handle().clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(5));
-                    match std::fs::read_to_string(&file) {
-                        Ok(script) => {
-                            use tauri::Manager;
-                            if let Some(w) = handle.get_webview_window("main") {
-                                if let Err(e) = w.eval(&script) {
-                                    eprintln!("Selbsttest-Skript fehlgeschlagen: {e}");
-                                    std::process::exit(3);
-                                }
-                            } else {
-                                eprintln!("Selbsttest: kein Fenster 'main'");
-                                std::process::exit(3);
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("Selbsttest-Skript {file} nicht lesbar: {e}");
-                            std::process::exit(3);
-                        }
-                    }
-                });
-            }
-            Ok(())
-        })
         .invoke_handler(tauri::generate_handler![
             // Repository
             commands::open_repo,
@@ -138,9 +108,8 @@ fn main() {
             commands::git_raw,
             // System
             updates::check_for_updates,
-            updates::install_update,
-            updates::open_update_download,
-            updates::open_releases,
+            updates::open_project,
+            commands::start_selftest,
             commands::pick_folder,
             commands::open_path,
             commands::set_title,
