@@ -10,8 +10,16 @@
  try {
   await until(()=>document.querySelector('.branches-panel'));
   const initial=await invoke('status');assert(initial.conflicts.length===8,'fixture must contain 8 Git conflicts');
-  await open('auto.txt');assert(!document.querySelector('[data-act="auto-resolve"]').disabled,'simple intraline merge not available');
-  click('[data-act="auto-resolve"]');assert(app.mergeEditor.resultText()==='let x = 10; let y = 20;\n','auto preview wrong');
+  const beforeGuard=await content('auto.txt');
+  const context=await invoke('conflict_data',{path:'auto.txt'});
+  for(const args of [{expected_working:'stale working file'}, {expected_sources:['stale base','stale ours','stale theirs']}]) {
+   let rejected=false;
+   try{await invoke('save_conflict',{path:'auto.txt',text:'must not be written',mark_resolved:true,...args});}catch{rejected=true;}
+   assert(rejected,'stale merge input accepted');assert(await content('auto.txt')===beforeGuard,'stale save changed working file');
+  }
+  notes.push('PASS stale worktree and index inputs rejected without overwriting');
+  await open('auto.txt');assert(document.querySelector('[data-act="auto-resolve"]').disabled,'same-line proposal treated as safe');
+  click('[data-act="auto-region"]');assert(app.mergeEditor.resultText()==='let x = 10; let y = 20;\n','auto preview wrong');
   assert((await invoke('status')).conflicts.some(e=>e.path==='auto.txt'),'auto resolved on disk before review');
   await saved('auto.txt');assert(await content('auto.txt')==='let x = 10; let y = 20;\n','auto save wrong');notes.push('PASS Auto Resolve previews separate same-line changes and saves only on confirmation');
   for(const [path,action,expected] of [['left.txt','take-ours','local\n'],['right.txt','take-theirs','incoming\n'],['both.txt','take-both','local\nincoming\n'],['tail.txt','take-theirs','incoming']]){

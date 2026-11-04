@@ -173,31 +173,61 @@ impl Git {
     }
 
     /// Update an existing local branch only by fast-forward, with explicit state checks.
-    pub fn checkout_remote_update(&self, remote: &str, local: &str, expected_local: &str, expected_remote: &str) -> Result<CommandResult, String> {
+    pub fn checkout_remote_update(
+        &self,
+        remote: &str,
+        local: &str,
+        expected_local: &str,
+        expected_remote: &str,
+    ) -> Result<CommandResult, String> {
         self.valid_branch(remote)?;
         self.valid_branch(local)?;
-        let snapshot=self.snapshot()?;
+        let snapshot = self.snapshot()?;
         if snapshot.merging || snapshot.rebasing || snapshot.cherry_picking {
             return Err("Schließe zuerst den laufenden Git-Vorgang ab.".into());
         }
         if !self.status()?.all.is_empty() {
             return Err("Es gibt lokale Dateiänderungen. Committe oder verwerfe sie zuerst; der Branch wurde nicht aktualisiert.".into());
         }
-        let local_ref=format!("refs/heads/{local}");
-        let remote_ref=format!("refs/remotes/{remote}");
-        let local_oid=self.run(["rev-parse", "--verify", &format!("{local_ref}^{{commit}}")])?;
-        let remote_oid=self.run(["rev-parse", "--verify", &format!("{remote_ref}^{{commit}}")])?;
-        if expected_local.len()<7 || expected_remote.len()<7 || !local_oid.trim().starts_with(expected_local) || !remote_oid.trim().starts_with(expected_remote) {
-            return Err("Der Branch-Stand hat sich geändert. Bitte aktualisieren und erneut auswählen.".into());
+        let local_ref = format!("refs/heads/{local}");
+        let remote_ref = format!("refs/remotes/{remote}");
+        let local_oid = self.run(["rev-parse", "--verify", &format!("{local_ref}^{{commit}}")])?;
+        let remote_oid =
+            self.run(["rev-parse", "--verify", &format!("{remote_ref}^{{commit}}")])?;
+        if expected_local.len() < 7
+            || expected_remote.len() < 7
+            || !local_oid.trim().starts_with(expected_local)
+            || !remote_oid.trim().starts_with(expected_remote)
+        {
+            return Err(
+                "Der Branch-Stand hat sich geändert. Bitte aktualisieren und erneut auswählen."
+                    .into(),
+            );
         }
-        if self.raw(["merge-base", "--is-ancestor", local_oid.trim(), remote_oid.trim()]).code!=0 {
+        if self
+            .raw([
+                "merge-base",
+                "--is-ancestor",
+                local_oid.trim(),
+                remote_oid.trim(),
+            ])
+            .code
+            != 0
+        {
             return Err("Der lokale Branch enthält eigene Commits. Automatisches Aktualisieren würde sie verwerfen. Öffne den lokalen Branch und vergleiche oder merge die Stände.".into());
         }
-        let switched=self.checkout_branch(local,None,false,false)?;
-        if !switched.ok { return Ok(switched); }
-        let result=self.run_result(["merge", "--ff-only", "--no-edit", remote_oid.trim()]);
+        let switched = self.checkout_branch(local, None, false, false)?;
+        if !switched.ok {
+            return Ok(switched);
+        }
+        let result = self.run_result(["merge", "--ff-only", "--no-edit", remote_oid.trim()]);
         if result.ok {
-            self.run(["branch", &format!("--set-upstream-to={remote}"), "--", local])?;
+            self.run([
+                "branch",
+                &format!("--set-upstream-to={remote}"),
+                "--",
+                local,
+            ])?;
         }
         Ok(result)
     }
@@ -710,26 +740,48 @@ impl Git {
     }
 
     /// Resolve missing tracking only after the UI explicitly confirms the unique same-name remote.
-    pub fn prepare_pull(&self, expected_branch: Option<&str>, track_same_name: bool) -> Result<(), String> {
+    pub fn prepare_pull(
+        &self,
+        expected_branch: Option<&str>,
+        track_same_name: bool,
+    ) -> Result<(), String> {
         let snapshot = self.snapshot()?;
         if snapshot.merging || snapshot.rebasing || snapshot.cherry_picking {
             return Err("Schließe zuerst den laufenden Git-Vorgang ab.".into());
         }
-        let branch = snapshot.head_branch.ok_or("Kein Branch ausgecheckt. Wechsle zuerst auf einen lokalen Branch.")?;
+        let branch = snapshot
+            .head_branch
+            .ok_or("Kein Branch ausgecheckt. Wechsle zuerst auf einen lokalen Branch.")?;
         if expected_branch.is_some_and(|expected| expected != branch) {
-            return Err("Der Branch wurde inzwischen gewechselt. Bitte Pull erneut starten.".into());
+            return Err(
+                "Der Branch wurde inzwischen gewechselt. Bitte Pull erneut starten.".into(),
+            );
         }
         let branches = self.branches()?;
-        let current = branches.iter().find(|b| b.is_current).ok_or("Aktueller Branch nicht verfügbar.")?;
+        let current = branches
+            .iter()
+            .find(|b| b.is_current)
+            .ok_or("Aktueller Branch nicht verfügbar.")?;
         if current.upstream.is_none() {
             if !track_same_name {
-                return Err("Kein Upstream eingerichtet. Ordne zuerst einen Remote-Branch für Pull zu.".into());
+                return Err(
+                    "Kein Upstream eingerichtet. Ordne zuerst einen Remote-Branch für Pull zu."
+                        .into(),
+                );
             }
-            let candidates: Vec<_> = branches.iter().filter(|b| b.is_remote && b.checkout_name == branch).collect();
+            let candidates: Vec<_> = branches
+                .iter()
+                .filter(|b| b.is_remote && b.checkout_name == branch)
+                .collect();
             if candidates.len() != 1 {
                 return Err("Kein eindeutiger Remote-Branch mit gleichem Namen. Bitte die Upstream-Zuordnung prüfen.".into());
             }
-            self.run(["branch", &format!("--set-upstream-to={}", candidates[0].name), "--", &branch])?;
+            self.run([
+                "branch",
+                &format!("--set-upstream-to={}", candidates[0].name),
+                "--",
+                &branch,
+            ])?;
         }
         Ok(())
     }

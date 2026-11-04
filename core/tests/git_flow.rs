@@ -537,37 +537,68 @@ fn file_history_follows_renames_and_treats_paths_literally() {
 
 #[test]
 fn tracking_status_distinguishes_unpushed_incoming_and_missing_upstream() {
-    let dir=tmp_repo("tracking-status");let g=setup(&dir);
-    g.run(["commit","--allow-empty","-qm","base"]).unwrap();
-    g.run(["remote","add","origin",dir.to_str().unwrap()]).unwrap();
-    g.run(["update-ref","refs/remotes/origin/main","HEAD"]).unwrap();
-    g.run(["branch","--set-upstream-to=origin/main","main"]).unwrap();
-    let current=||g.branches().unwrap().into_iter().find(|b|b.is_current).unwrap();
-    assert!(current().tracking_known);assert_eq!((current().ahead,current().behind),(0,0));
-    g.run(["commit","--allow-empty","-qm","local"]).unwrap();
-    assert_eq!((current().ahead,current().behind),(1,0));
-    g.run(["update-ref","refs/remotes/origin/main","HEAD"]).unwrap();
-    assert_eq!((current().ahead,current().behind),(0,0));
-    let tree=g.run(["rev-parse","HEAD^{tree}"]).unwrap();let head=g.run(["rev-parse","HEAD"]).unwrap();
-    let remote=g.run(["commit-tree",tree.trim(),"-p",head.trim(),"-m","remote change"]).unwrap();
-    g.run(["update-ref","refs/remotes/origin/main",remote.trim()]).unwrap();
-    assert_eq!((current().ahead,current().behind),(0,1));
-    g.run(["commit","--allow-empty","-qm","diverged"]).unwrap();
-    assert_eq!((current().ahead,current().behind),(1,1));
-    g.run(["update-ref","-d","refs/remotes/origin/main"]).unwrap();assert!(!current().tracking_known);
-    g.run(["branch","--unset-upstream","main"]).unwrap();assert!(current().upstream.is_none());assert!(!current().tracking_known);
+    let dir = tmp_repo("tracking-status");
+    let g = setup(&dir);
+    g.run(["commit", "--allow-empty", "-qm", "base"]).unwrap();
+    g.run(["remote", "add", "origin", dir.to_str().unwrap()])
+        .unwrap();
+    g.run(["update-ref", "refs/remotes/origin/main", "HEAD"])
+        .unwrap();
+    g.run(["branch", "--set-upstream-to=origin/main", "main"])
+        .unwrap();
+    let current = || {
+        g.branches()
+            .unwrap()
+            .into_iter()
+            .find(|b| b.is_current)
+            .unwrap()
+    };
+    assert!(current().tracking_known);
+    assert_eq!((current().ahead, current().behind), (0, 0));
+    g.run(["commit", "--allow-empty", "-qm", "local"]).unwrap();
+    assert_eq!((current().ahead, current().behind), (1, 0));
+    g.run(["update-ref", "refs/remotes/origin/main", "HEAD"])
+        .unwrap();
+    assert_eq!((current().ahead, current().behind), (0, 0));
+    let tree = g.run(["rev-parse", "HEAD^{tree}"]).unwrap();
+    let head = g.run(["rev-parse", "HEAD"]).unwrap();
+    let remote = g
+        .run([
+            "commit-tree",
+            tree.trim(),
+            "-p",
+            head.trim(),
+            "-m",
+            "remote change",
+        ])
+        .unwrap();
+    g.run(["update-ref", "refs/remotes/origin/main", remote.trim()])
+        .unwrap();
+    assert_eq!((current().ahead, current().behind), (0, 1));
+    g.run(["commit", "--allow-empty", "-qm", "diverged"])
+        .unwrap();
+    assert_eq!((current().ahead, current().behind), (1, 1));
+    g.run(["update-ref", "-d", "refs/remotes/origin/main"])
+        .unwrap();
+    assert!(!current().tracking_known);
+    g.run(["branch", "--unset-upstream", "main"]).unwrap();
+    assert!(current().upstream.is_none());
+    assert!(!current().tracking_known);
 }
 
 #[test]
 fn pull_tracking_confirmation_preserves_staged_work_and_pulls_remote() {
     let dir = tmp_repo("pull-tracking");
     let remote = tmp_repo("pull-tracking-remote");
-    Git::new(remote.clone()).run(["init", "--bare", "-q"]).unwrap();
+    Git::new(remote.clone())
+        .run(["init", "--bare", "-q"])
+        .unwrap();
     let g = setup(&dir);
     std::fs::write(dir.join(".gitignore"), "base\n").unwrap();
     g.run(["add", ".gitignore"]).unwrap();
     g.run(["commit", "-qm", "base"]).unwrap();
-    g.run(["remote", "add", "origin", remote.to_str().unwrap()]).unwrap();
+    g.run(["remote", "add", "origin", remote.to_str().unwrap()])
+        .unwrap();
     g.run(["push", "-q", "origin", "main"]).unwrap();
     g.run(["checkout", "-qb", "remote-update"]).unwrap();
     std::fs::write(dir.join("remote.txt"), "remote update\n").unwrap();
@@ -581,7 +612,14 @@ fn pull_tracking_confirmation_preserves_staged_work_and_pulls_remote() {
     let head = g.run(["rev-parse", "HEAD"]).unwrap();
     assert!(g.prepare_pull(Some("main"), false).is_err());
     assert!(g.prepare_pull(Some("other"), true).is_err());
-    assert!(g.branches().unwrap().iter().find(|b| b.is_current).unwrap().upstream.is_none());
+    assert!(g
+        .branches()
+        .unwrap()
+        .iter()
+        .find(|b| b.is_current)
+        .unwrap()
+        .upstream
+        .is_none());
     g.prepare_pull(Some("main"), true).unwrap();
     assert_eq!(g.run(["rev-parse", "HEAD"]).unwrap(), head);
     assert_eq!(g.run(["diff", "--cached", "--binary"]).unwrap(), staged);
@@ -600,49 +638,87 @@ fn pull_tracking_does_not_guess_missing_or_ambiguous_remotes() {
     g.run(["commit", "-qm", "base"]).unwrap();
     assert!(g.prepare_pull(Some("main"), true).is_err());
     for remote in ["origin", "second"] {
-        g.run(["remote", "add", remote, "/unused-local-remote"]).unwrap();
-        g.run(["update-ref", &format!("refs/remotes/{remote}/main"), "HEAD"]).unwrap();
+        g.run(["remote", "add", remote, "/unused-local-remote"])
+            .unwrap();
+        g.run(["update-ref", &format!("refs/remotes/{remote}/main"), "HEAD"])
+            .unwrap();
     }
     assert!(g.prepare_pull(Some("main"), true).is_err());
-    assert!(g.branches().unwrap().iter().find(|b| b.is_current).unwrap().upstream.is_none());
+    assert!(g
+        .branches()
+        .unwrap()
+        .iter()
+        .find(|b| b.is_current)
+        .unwrap()
+        .upstream
+        .is_none());
     g.run(["checkout", "--detach", "-q"]).unwrap();
     assert!(g.prepare_pull(None, true).is_err());
 }
 
 #[test]
 fn remote_checkout_update_preserves_local_work_and_never_discards_commits() {
-    let dir=tmp_repo("remote-checkout-update");
-    let g=setup(&dir);
-    std::fs::write(dir.join("file"),"base\n").unwrap();
-    g.run(["add","file"]).unwrap();
-    g.run(["commit","-qm","base"]).unwrap();
-    g.run(["branch","feature"]).unwrap();
-    let base=g.snapshot().unwrap().head;
-    g.run(["remote","add","origin","/unused-local-remote"]).unwrap();
-    g.run(["switch","-c","remote-source"]).unwrap();
-    std::fs::write(dir.join("file"),"remote update\n").unwrap();
-    g.run(["commit","-qam","remote update"]).unwrap();
-    let remote=g.snapshot().unwrap().head;
-    g.run(["update-ref","refs/remotes/origin/feature",&remote]).unwrap();
-    g.run(["switch","main"]).unwrap();
-    std::fs::write(dir.join("file"),"unsaved local change\n").unwrap();
-    assert!(g.checkout_remote_update("origin/feature","feature",&base,&remote).is_err());
-    assert_eq!(g.snapshot().unwrap().head_branch.as_deref(),Some("main"));
-    assert_eq!(std::fs::read_to_string(dir.join("file")).unwrap(),"unsaved local change\n");
-    g.run(["restore","file"]).unwrap();
-    assert!(g.checkout_remote_update("origin/feature","feature",&base,&base).is_err());
-    assert_eq!(g.snapshot().unwrap().head_branch.as_deref(),Some("main"));
-    assert!(g.checkout_remote_update("origin/feature","feature",&base,&remote).unwrap().ok);
-    assert_eq!(g.snapshot().unwrap().head,remote);
-    assert_eq!(g.snapshot().unwrap().head_branch.as_deref(),Some("feature"));
-    assert_eq!(g.branches().unwrap().iter().find(|b|b.is_current).unwrap().upstream.as_deref(),Some("origin/feature"));
-    std::fs::write(dir.join("local.txt"),"local commit\n").unwrap();
-    g.run(["add","local.txt"]).unwrap();
-    g.run(["commit","-qm","own local commit"]).unwrap();
-    let own=g.snapshot().unwrap().head;
-    g.run(["switch","main"]).unwrap();
-    assert!(g.checkout_remote_update("origin/feature","feature",&own,&remote).is_err());
-    assert_eq!(g.run(["rev-parse","feature"]).unwrap().trim(),own);
-    assert_eq!(g.snapshot().unwrap().head_branch.as_deref(),Some("main"));
-    assert!(g.checkout_remote_update("-bad","feature",&base,&remote).is_err());
+    let dir = tmp_repo("remote-checkout-update");
+    let g = setup(&dir);
+    std::fs::write(dir.join("file"), "base\n").unwrap();
+    g.run(["add", "file"]).unwrap();
+    g.run(["commit", "-qm", "base"]).unwrap();
+    g.run(["branch", "feature"]).unwrap();
+    let base = g.snapshot().unwrap().head;
+    g.run(["remote", "add", "origin", "/unused-local-remote"])
+        .unwrap();
+    g.run(["switch", "-c", "remote-source"]).unwrap();
+    std::fs::write(dir.join("file"), "remote update\n").unwrap();
+    g.run(["commit", "-qam", "remote update"]).unwrap();
+    let remote = g.snapshot().unwrap().head;
+    g.run(["update-ref", "refs/remotes/origin/feature", &remote])
+        .unwrap();
+    g.run(["switch", "main"]).unwrap();
+    std::fs::write(dir.join("file"), "unsaved local change\n").unwrap();
+    assert!(g
+        .checkout_remote_update("origin/feature", "feature", &base, &remote)
+        .is_err());
+    assert_eq!(g.snapshot().unwrap().head_branch.as_deref(), Some("main"));
+    assert_eq!(
+        std::fs::read_to_string(dir.join("file")).unwrap(),
+        "unsaved local change\n"
+    );
+    g.run(["restore", "file"]).unwrap();
+    assert!(g
+        .checkout_remote_update("origin/feature", "feature", &base, &base)
+        .is_err());
+    assert_eq!(g.snapshot().unwrap().head_branch.as_deref(), Some("main"));
+    assert!(
+        g.checkout_remote_update("origin/feature", "feature", &base, &remote)
+            .unwrap()
+            .ok
+    );
+    assert_eq!(g.snapshot().unwrap().head, remote);
+    assert_eq!(
+        g.snapshot().unwrap().head_branch.as_deref(),
+        Some("feature")
+    );
+    assert_eq!(
+        g.branches()
+            .unwrap()
+            .iter()
+            .find(|b| b.is_current)
+            .unwrap()
+            .upstream
+            .as_deref(),
+        Some("origin/feature")
+    );
+    std::fs::write(dir.join("local.txt"), "local commit\n").unwrap();
+    g.run(["add", "local.txt"]).unwrap();
+    g.run(["commit", "-qm", "own local commit"]).unwrap();
+    let own = g.snapshot().unwrap().head;
+    g.run(["switch", "main"]).unwrap();
+    assert!(g
+        .checkout_remote_update("origin/feature", "feature", &own, &remote)
+        .is_err());
+    assert_eq!(g.run(["rev-parse", "feature"]).unwrap().trim(), own);
+    assert_eq!(g.snapshot().unwrap().head_branch.as_deref(), Some("main"));
+    assert!(g
+        .checkout_remote_update("-bad", "feature", &base, &remote)
+        .is_err());
 }

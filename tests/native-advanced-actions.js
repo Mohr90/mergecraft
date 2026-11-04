@@ -10,8 +10,8 @@
  try {
   await until(()=>document.querySelector('.branches-panel'));
   const initial=await invoke('status');assert(initial.conflicts.length===9,'fixture must contain 9 Git conflicts');
-  await open('auto.txt');assert(!document.querySelector('[data-act="auto-resolve"]').disabled,'simple intraline merge not available');
-  click('[data-act="auto-resolve"]');assert(app.mergeEditor.resultText()==='let x = 10; let y = 20;\n','auto preview wrong');
+  await open('auto.txt');assert(document.querySelector('[data-act="auto-resolve"]').disabled,'same-line proposal treated as safe');
+  click('[data-act="auto-region"]');assert(app.mergeEditor.resultText()==='let x = 10; let y = 20;\n','auto preview wrong');
   assert((await invoke('status')).conflicts.some(e=>e.path==='auto.txt'),'auto resolved on disk before review');
   await saved('auto.txt');assert(await content('auto.txt')==='let x = 10; let y = 20;\n','auto save wrong');notes.push('PASS Auto Resolve previews separate same-line changes and saves only on confirmation');
   await open('advanced.txt');const expectedAdvanced='const a=10;\nconst b=20;\nconst c=30;\n';

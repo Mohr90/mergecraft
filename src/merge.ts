@@ -3,12 +3,12 @@ import { t, h, m, localizeText } from "./i18n";
 // lokal | Ergebnis | eingehend, Konflikt für Konflikt entscheidbar.
 
 import type { ConflictData, Highlights, Region, WordSpan } from "./api";
-import { simpleConflictResolution } from "./auto";
+import { analyzeConflict, type Proposal } from "./auto";
 export { simpleConflictResolution } from "./auto";
 import { confirmDialog, el, esc, icon } from "./ui";
 
 export interface MergeHost {
-  save: (text: string, markResolved: boolean) => Promise<{ ok: boolean; message: string }>;
+  save: (text: string, markResolved: boolean, expected:ConflictData) => Promise<{ ok: boolean; message: string }>;
   onSaved: (message: string, resolved: boolean) => void;
   onError: (message: string) => void;
   onClose: () => void;
@@ -82,6 +82,39 @@ export class MergeEditor {
   private rawBefore="";
   private typingKey="";
   private typingTime=0;
+  private proposals=new Map<number,Proposal|null>();
+  private worker:Worker|null=null;
+  private resultWidth=42;
+  private knownFiles=new Set<string>();
+  private inlineError="";
+  private fileState = new Map<string,number|"resolved">();
+  private scope="";
+  setScope(scope:string) { if(scope!==this.scope){this.clearDrafts();this.scope=scope;} }
+  private fingerprint(data:ConflictData):string {return JSON.stringify([data.root,data.path,data.base,data.ours,data.theirs,data.merged.text,data.merged.exists,data.ours_label,data.theirs_label]);}
+  hasStaleDraft(data:ConflictData):boolean {const draft=this.drafts.get(data.path);return !!draft?.dirty && draft.fingerprint!==this.fingerprint(data);}
+  dropDraft(path:string) {this.drafts.delete(path);}
+  forget(path:string) {this.drafts.delete(path);this.fileState.set(path,"resolved");}
+  private error(message:string) {this.inlineError=message;const node=this.root?.querySelector<HTMLElement>('.merge-inline-error');if(node){node.textContent=message;node.hidden=false;}this.host.onError(message);}
+  private analyze() {
+    this.worker?.terminate();this.worker=null;this.proposals.clear();
+    if(this.data.guarded)return;
+    for(const index of this.conflictIndices()) {
+      const r=this.data.regions[index];const base=this.baseLines.slice(r.base[0],r.base[0]+r.base[1]),ours=this.regionSide(r,'ours'),theirs=this.regionSide(r,'theirs');
+      if([...base,...ours,...theirs].join('').length>5000) {
+        this.worker??=new Worker(new URL('./merge-worker.ts',import.meta.url),{type:'module'});
+        this.worker.onerror=()=>{this.worker?.terminate();this.worker=null;};
+        this.worker.onmessage=event=>{const {index,proposal}=event.data;this.proposals.set(index,proposal);if(!this.res.has(index)&&!this.nodes.get(index)?.contains(document.activeElement))this.updateRegion(index);this.updateHeader();};
+        this.worker.postMessage({index,base,ours,theirs});
+      } else this.proposals.set(index,analyzeConflict(base,ours,theirs));
+    }
+  }
+  private drafts = new Map<string, {fingerprint:string;state:EditorSnapshot;past:{state:EditorSnapshot;label:string}[];future:{state:EditorSnapshot;label:string}[];initial:EditorSnapshot;saved:string;scroll:number;dirty:boolean}>();
+  clearDrafts() { this.drafts.clear();this.knownFiles.clear();this.fileState.clear();this.worker?.terminate();this.worker=null; }
+  stash() {
+    if (!this.data || !this.root || this.fileState.get(this.data.path)==="resolved") return;
+    this.fileState.set(this.data.path,this.openRegions().length);
+    this.drafts.set(this.data.path,{fingerprint:this.fingerprint(this.data),state:this.snapshot(),past:[...this.past],future:[...this.future],initial:this.initial,saved:this.savedText,dirty:this.touched,scroll:this.root.querySelector('.panes')?.scrollTop??0});
+  }
 
   constructor(host: MergeHost) {
     this.host = host;
@@ -104,18 +137,19 @@ export class MergeEditor {
     this.theirsLines = splitLines(data.theirs.text);
     this.baseLines = splitLines(data.base.text);
     this.savedText=data.working_modified ? data.merged.text : this.resultText();
+    this.analyze();this.inlineError="";
   }
 
   isSaving():boolean {return this.saving;}
 
   /** Wurde seit dem Laden etwas entschieden oder getippt? */
   hasUnsavedChanges(): boolean {
-    return this.touched;
+    return this.touched || [...this.drafts].some(([path,draft])=>path!==this.data.path && draft.dirty);
   }
 
   /** Änderungen verwerfen (nach Rückfrage). */
   discardChanges() {
-    this.touched = false;
+    this.touched = false;this.drafts.clear();
   }
 
   private needsDecision(r: Region): boolean {
@@ -237,6 +271,11 @@ export class MergeEditor {
       if (status) status.textContent = t("Vorhandene Arbeitsdatei geladen – bearbeite deine gespeicherte Fassung weiter.");
     }
     this.initial=this.snapshot();
+    const draft=this.drafts.get(this.data.path);
+    if(draft && draft.fingerprint===this.fingerprint(this.data)) {
+      this.savedText=draft.saved;this.initial=draft.initial;this.past=draft.past;this.future=draft.future;this.restore(draft.state);
+      const panes=this.root.querySelector('.panes');if(panes)panes.scrollTop=draft.scroll;
+    }
   }
 
   /** Rebuild chrome from the existing editor model without reopening the file or resetting undo history. */
@@ -286,6 +325,21 @@ export class MergeEditor {
     this.checkpoint(t("Auswahl zurücksetzen"));this.restore(this.initial);
   }
 
+  private fileNav():HTMLElement {
+    const files=el('nav','merge-files');files.setAttribute('aria-label',t('Konfliktdateien'));
+    this.siblings.forEach(file=>this.knownFiles.add(file.path));this.knownFiles.add(this.data.path);
+    for(const path of this.knownFiles) {
+      const button=el('button','merge-file');button.type='button';button.title=path;
+      const state=this.fileState.get(path);
+      const label=state==='resolved' ? t('Gelöst') : state===0 ? t('Prüfen') : typeof state==='number' ? `${state} ${t('offen')}` : t('offen');
+      button.innerHTML=`<span>${esc(path)}</span><small>${esc(label)}</small>`;
+      button.setAttribute('aria-current',String(path===this.data.path));
+      button.disabled=!this.siblings.some(file=>file.path===path)||!this.host.onSwitch;
+      button.addEventListener('click',()=>{if(!this.saving)this.host.onSwitch?.(path);});files.appendChild(button);
+    }
+    return files;
+  }
+
   private build(): HTMLElement {
     const d = this.data;
     const wrap = el("div", "merge");
@@ -314,28 +368,31 @@ export class MergeEditor {
         <button class="btn ghost" data-act="accept-ours-all" title="Nur noch offene Konflikte von links übernehmen; vorhandene Entscheidungen bleiben erhalten.">Offene von links</button>
         <button class="btn ghost" data-act="accept-theirs-all" title="Nur noch offene Konflikte von rechts übernehmen; vorhandene Entscheidungen bleiben erhalten.">Offene von rechts</button>
         <button class="btn ghost" data-act="raw" title="Die ganze Ergebnisdatei direkt bearbeiten">Roh-Modus</button>
-        ${
-          this.siblings.length > 1
-            ? h`<select class="file-select mono" data-act="switch" title="Andere Konfliktdatei">${this.siblings
-                .map(
-                  (s) =>
-                    `<option value="${esc(s.path)}"${s.path === d.path ? " selected" : ""}>${esc(
-                      baseName(s.path),
-                    )} (${esc(s.code)})</option>`,
-                )
-                .join("")}</select>`
-            : ""
-        }
         <button class="icon-btn" data-act="close" title="Editor schließen">${icon("close", 15)}</button>
       </div>`;
     wrap.appendChild(head);
+    const direction=el('div','merge-direction');
+    direction.innerHTML=`<b>${esc(d.theirs_label)} → ${esc(d.ours_label)}</b>`;
+    direction.insertAdjacentHTML('beforeend',h`<span class="merge-steps">Konflikte lösen → Merge abschließen → Pushen</span>`);
+    wrap.appendChild(direction);
+    wrap.style.setProperty('--merge-result-width',`${this.resultWidth}%`);
+    const width=el('label','merge-width',h`Ergebnisbreite <input type="range" min="30" max="60" step="1" value="${this.resultWidth}" aria-label="Ergebnisbreite">`);
+    width.querySelector('input')!.addEventListener('input',event=>{this.resultWidth=Number((event.target as HTMLInputElement).value);wrap.style.setProperty('--merge-result-width',`${this.resultWidth}%`);});
+    direction.appendChild(width);
+    const inline=el('div','merge-inline-error');inline.setAttribute('role','alert');inline.hidden=!this.inlineError;inline.textContent=this.inlineError;wrap.appendChild(inline);
+    const secondary=el('details','merge-tools');
+    secondary.innerHTML=h`<summary>Weitere Aktionen</summary>`;
+    for(const action of ['reset-preview','abort-merge','accept-ours-all','accept-theirs-all','raw']) {
+      const button=head.querySelector(`[data-act="${action}"]`);if(button)secondary.appendChild(button);
+    }
+    head.querySelector('.right-actions')?.appendChild(secondary);
     if (d.ours.binary || d.theirs.binary || !d.ours.exists || !d.theirs.exists) {
       head.querySelectorAll('[data-act="undo"], [data-act="redo"], [data-act="reset-preview"], [data-act="raw"], [data-act="auto-resolve"], [data-act^="accept-"], .nav').forEach(n=>n.remove());
       const binary = el("div", "empty binary-choice", h`<h2>${d.ours.binary || d.theirs.binary ? t("Binärdatei") : t("Datei auf einer Seite gelöscht")}</h2>
         <p>Wähle die vollständige Datei oder bestätige die Löschung. Die gewählte Seite wird unverändert übernommen und als gelöst markiert.</p>
         <div class="row-actions-gap"><button class="btn" data-act="whole-ours">${d.ours.exists ? m`Lokale Datei übernehmen (${esc(d.ours_label)})` : t("Lokale Löschung übernehmen")}</button>
         <button class="btn primary" data-act="whole-theirs">${d.theirs.exists ? m`Eingehende Datei übernehmen (${esc(d.theirs_label)})` : t("Eingehende Löschung übernehmen")}</button></div>`);
-      wrap.appendChild(binary);
+      const workspace=el('div','merge-workspace');workspace.append(this.fileNav(),binary);wrap.appendChild(workspace);
       wrap.addEventListener("click", e => this.onClick(e));
       return wrap;
     }
@@ -364,14 +421,15 @@ export class MergeEditor {
     const progress=el("div","merge-progress",'<span></span>');
     progress.setAttribute("role","progressbar");progress.setAttribute("aria-label",t("Konflikte aufgelöst"));wrap.appendChild(progress);
 
+    wrap.appendChild(el("p","auto-summary"));
     // Spaltenköpfe + Raster
     const panes = el("div", "panes");
     const heads = el("div", "pane-heads");
     heads.innerHTML = h`
-      <div class="ph"><span class="dot ours"></span><b>Links · Lokal</b><span class="ref">${esc(d.ours_label)}</span>
+      <div class="ph"><span class="dot ours"></span><b>Aktueller Branch</b><span class="ref">${esc(d.ours_label)}</span>
         <span class="fname mono">${esc(baseName(d.path))}</span></div>
       <div class="ph"><span class="dot result"></span><b>Ergebnis</b><span class="sub">wird geschrieben</span></div>
-      <div class="ph"><span class="dot theirs"></span><b>Rechts · Eingehend</b><span class="ref">${esc(d.theirs_label)}</span>
+      <div class="ph"><span class="dot theirs"></span><b>Eingehender Branch</b><span class="ref">${esc(d.theirs_label)}</span>
         <span class="fname mono">${esc(baseName(d.path))}</span></div>`;
     panes.appendChild(heads);
 
@@ -382,7 +440,9 @@ export class MergeEditor {
       grid.appendChild(node);
     });
     panes.appendChild(grid);
-    wrap.appendChild(panes);
+    const workspace=el('div','merge-workspace');
+    const files=this.fileNav();
+    workspace.append(files,panes);wrap.appendChild(workspace);
 
     // Fußzeile
     const foot = el("div", "merge-foot");
@@ -391,7 +451,7 @@ export class MergeEditor {
       <span class="right-actions">
         <span class="hint muted small nowrap">Alt+↑/↓ Konflikt · Alt+←/→ übernehmen · Alt+B beide · Alt+Enter speichern</span>
         <button class="btn" data-act="save">Speichern</button>
-        <button class="btn primary" data-act="save-resolve">Speichern &amp; als gelöst markieren</button>
+        <button class="btn primary" data-act="save-resolve">Übernehmen &amp; nächste Datei</button>
       </span>`;
     wrap.appendChild(foot);
 
@@ -425,7 +485,8 @@ export class MergeEditor {
         }</span>
         <button class="mini" data-act="take-ours" title="Links übernehmen: lokale Fassung (Alt+←)">${icon("right", 12)} Links übernehmen</button>
         <button class="mini" data-act="take-theirs" title="Rechts übernehmen: eingehende Fassung (Alt+→)">${icon("left", 12)} Rechts übernehmen</button>
-        <button class="mini" data-act="take-both" title="Beide Fassungen übernehmen">${icon("both", 12)} Beide</button>
+        <button class="mini" data-act="edit-region">Bearbeiten</button>
+        <button class="mini" data-act="take-both" title="Zuerst links, danach rechts übernehmen">${icon("both", 12)} Links → rechts</button>
         <button class="mini" data-act="revert" title="Entscheidung zurücknehmen">${icon("undo", 12)}</button>
         <span class="state ${res ? "ok" : "open"}">${
           res ? `✓ ${labelFor(res.choice)}` : t("offen")
@@ -439,6 +500,8 @@ export class MergeEditor {
       area.value = this.shownResultLines(r, i).join("\n");
       block.appendChild(area);
       const proposal=res ? null : this.autoCandidate(i);
+      const analysis=this.proposals.get(i);
+      if(!res)block.insertAdjacentHTML('beforeend',`<p class="proposal-reason">${esc(analysis ? t(analysis.kind==='review'?'Vorschlag prüfen':'Eindeutig zusammenführbar')+' · '+this.reason(analysis) : t('Manuelle Entscheidung nötig'))}</p>`);
       if(proposal!==null) {
         block.insertAdjacentHTML("beforeend",h`<details class="auto-suggestion"><summary>Automatischen Vorschlag ansehen</summary><pre>${esc(proposal.join("\n")||t("(leeres Ergebnis)"))}</pre><div><span>Noch nicht übernommen</span><button class="mini primary" data-act="auto-region">Vorschlag übernehmen</button></div></details>`);
       }
@@ -531,6 +594,8 @@ export class MergeEditor {
       progress.dataset.complete=String(!open.length);
     }
     this.nodes.forEach((node,index)=>node.classList.toggle("current",index===this.current));
+    const currentFile=wrap.querySelector('.merge-file[aria-current="true"] small');
+    if(currentFile)currentFile.textContent=open.length ? `${open.length} ${t('offen')}` : t('Prüfen');
     this.updateDirtyState();
     for(const [act,stack] of [["undo",this.past],["redo",this.future]] as const){
       const button=wrap.querySelector<HTMLButtonElement>(`[data-act="${act}"]`);
@@ -540,8 +605,11 @@ export class MergeEditor {
     const select=wrap.querySelector<HTMLSelectElement>(".file-select");if(select)select.disabled=this.saving;
     wrap.querySelectorAll<HTMLButtonElement>('[data-act^="take-"],[data-act="auto-region"],[data-act="revert"],[data-act="prev"],[data-act="next"],[data-act="jump"]').forEach(button=>button.disabled=this.saving);
     const candidates=this.autoCandidates();
+    const safe=candidates.filter(candidate=>this.proposals.get(candidate.index)?.kind==='safe');
+    const summary=wrap.querySelector('.auto-summary');
+    if(summary)summary.textContent=`${safe.length} ${t('kombinierbar')} · ${candidates.length-safe.length} ${t('Vorschlag prüfen')} · ${open.length-candidates.length} ${t('manuell entscheiden')}`;
     const autoButton=wrap.querySelector<HTMLButtonElement>('[data-act="auto-resolve"]');
-    if(autoButton) {autoButton.disabled=this.saving || this.rawMode || !candidates.length;autoButton.textContent=candidates.length ? `Auto Resolve (${candidates.length})` : "Auto Resolve";}
+    if(autoButton) {autoButton.disabled=this.saving || this.rawMode || !safe.length;autoButton.textContent=safe.length ? `Auto Resolve (${safe.length})` : "Auto Resolve";}
     wrap.querySelectorAll<HTMLButtonElement>('[data-act="accept-ours-all"],[data-act="accept-theirs-all"]').forEach(button=>button.disabled=this.saving || this.rawMode || !open.length);
     wrap.querySelectorAll<HTMLButtonElement>('[data-act="save"],[data-act="save-resolve"],[data-act="raw"]').forEach(button=>button.disabled=this.saving);
     const list = this.listForNav();
@@ -629,11 +697,21 @@ export class MergeEditor {
     if(this.data.guarded||this.rawMode||this.res.has(index)||this.data.ours.binary||this.data.theirs.binary||!this.data.ours.exists||!this.data.theirs.exists)return null;
     const region=this.data.regions[index];if(!this.needsDecision(region))return null;
     if(index===this.data.regions.length-1&&this.data.ours.text.endsWith("\n")!==this.data.theirs.text.endsWith("\n"))return null;
-    const [start,length]=region.base;
-    return simpleConflictResolution(this.baseLines.slice(start,start+length),this.regionSide(region,"ours"),this.regionSide(region,"theirs"));
+    return this.proposals.get(index)?.lines??null;
+  }
+  private reason(proposal:Proposal):string {
+    return t(proposal.reason==='same'?'Beide Seiten enthalten dieselbe Änderung':proposal.reason==='one-side'?'Nur eine Seite weicht von der Basis ab':proposal.reason==='separate'?'Änderungen betreffen getrennte Textstellen':'Änderungen innerhalb derselben Zeile: Ergebnis prüfen');
   }
   private autoCandidates(): {index:number;lines:string[]}[] {
     return this.openRegions().flatMap(index=>{const lines=this.autoCandidate(index);return lines===null?[]:[{index,lines}];});
+  }
+
+  private async previewAuto() {
+    const data=this.data,candidates=this.autoCandidates().filter(candidate=>this.proposals.get(candidate.index)?.kind==='safe');
+    if(!candidates.length)return;
+    const detail=`${candidates.length} ${t("kombinierbar")} · ${this.openRegions().length-candidates.length} ${t("manuell entscheiden")}\n\n`+candidates.map(candidate=>`${this.reason(this.proposals.get(candidate.index)!)}\n${candidate.lines.join('\n')}`).join('\n\n');
+    const approved=await confirmDialog(t("Automatischen Vorschlag ansehen"),detail,t("Vorschlag übernehmen"));
+    if(approved && this.data===data && !this.saving && !this.rawMode) this.applyDecisions(candidates.filter(candidate=>!this.res.has(candidate.index)).map(candidate=>({...candidate,choice:"auto"})));
   }
 
   private updateDirtyState() {
@@ -691,7 +769,7 @@ export class MergeEditor {
         return;
       case "auto-resolve":
         if(this.rawMode) return;
-        this.applyDecisions(this.autoCandidates().map(candidate=>({...candidate,choice:"auto"})));
+        void this.previewAuto();
         return;
       case "accept-ours-all":
         if(this.rawMode) return;
@@ -708,6 +786,7 @@ export class MergeEditor {
     if (Number.isNaN(idx)) return;
     this.current=idx;
     switch (act) {
+      case "edit-region": this.nodes.get(idx)?.querySelector<HTMLTextAreaElement>(".cf-edit")?.focus();break;
       case "auto-region": {const proposal=this.autoCandidate(idx);if(proposal!==null)this.decide(idx,"auto",proposal);break;}
       case "take-ours":
         this.decide(idx, "ours");
@@ -814,7 +893,7 @@ export class MergeEditor {
       grid.appendChild(area);
     } else {
       if (this.rawEl && this.rawEl.value !== this.resultText()) {
-        this.host.onError(t("Die freie Fassung bleibt im Textmodus erhalten. Speichere sie hier; die Block-Ansicht kann freien Text nicht verlustfrei zuordnen."));
+        this.error(t("Die freie Fassung bleibt im Textmodus erhalten. Speichere sie hier; die Block-Ansicht kann freien Text nicht verlustfrei zuordnen."));
         return;
       }
       this.rawMode = false;
@@ -837,7 +916,7 @@ export class MergeEditor {
     this.saving = true;
     this.updateHeader();
     this.root?.querySelectorAll<HTMLTextAreaElement>("textarea").forEach(area=>area.readOnly=true);
-    try { return await this.host.save(text, resolved); }
+    try { return await this.host.save(text, resolved,this.data); }
     catch(e) { return { ok: false, message: String(e) }; }
     finally {
       this.saving = false;
@@ -848,36 +927,38 @@ export class MergeEditor {
 
   private async doSave(markResolved: boolean) {
     if (this.saving) return;
-    if (this.data.ours.binary || this.data.theirs.binary) { this.host.onError(t("Bitte eine vollständige Dateiseite übernehmen.")); return; }
+    if (this.data.ours.binary || this.data.theirs.binary) { this.error(t("Bitte eine vollständige Dateiseite übernehmen.")); return; }
     if (this.rawMode && this.rawEl) {
       const text = this.rawEl.value;
       const hasMarkers = /^(<{7}|={7}|>{7}|\|{7})/m.test(text);
-      if (markResolved && hasMarkers) { this.host.onError(t("Entferne zuerst alle Konfliktmarker oder speichere die Datei als Zwischenstand.")); return; }
+      if (markResolved && hasMarkers) { this.error(t("Entferne zuerst alle Konfliktmarker oder speichere die Datei als Zwischenstand.")); return; }
       const r = await this.saveOnce(text, markResolved && !hasMarkers);
       if (r.ok) {
-        this.savedText=text;this.typingKey="";
+        this.drafts.delete(this.data.path);this.data.merged.text=text;this.savedText=text;this.typingKey="";
         this.touched = false;
         this.updateDirtyState();
+        if(markResolved)this.forget(this.data.path);
         this.host.onSaved(r.message, markResolved && !hasMarkers);
-      } else this.host.onError(r.message);
+      } else this.error(r.message);
       return;
     }
     const open = this.openRegions();
     if (markResolved && open.length) {
-      this.host.onError(
+      this.error(
         m`${open.length} ${open.length === 1 ? t("Bereich") : t("Bereiche")} noch offen. Wähle links, rechts oder bearbeite das Ergebnis.`,
       );
       return;
     }
     const result=this.resultText();
-    if(markResolved && /^(<{7}|={7}|>{7}|\|{7})/m.test(result)) { this.host.onError(t("Entferne zuerst alle Konfliktmarker aus dem Ergebnis.")); return; }
+    if(markResolved && /^(<{7}|={7}|>{7}|\|{7})/m.test(result)) { this.error(t("Entferne zuerst alle Konfliktmarker aus dem Ergebnis.")); return; }
     const r = await this.saveOnce(result, markResolved);
     if (r.ok) {
-      this.savedText=result;this.typingKey="";
+      this.drafts.delete(this.data.path);this.data.merged.text=result;this.savedText=result;this.typingKey="";
       this.touched = false;
       this.updateDirtyState();
+      if(markResolved)this.forget(this.data.path);
       this.host.onSaved(r.message, markResolved);
-    } else this.host.onError(r.message);
+    } else this.error(r.message);
   }
 }
 

@@ -37,6 +37,8 @@ export interface PanelCtx {
   compare(b: BranchInfo): void;
   mergeAbort(): void;
   mergeContinue(): void;
+  push?(): void;
+  mergeError?:string;
   remove(b: BranchInfo): void;
   newFrom(b: BranchInfo | null): void;
   run(label: string, fn: () => Promise<CommandResult>): void;
@@ -108,6 +110,7 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
   const tracked = st.staged.length + st.changed.length;
   wrap.insertAdjacentHTML("beforeend", h`<header class="page-heading"><div><h1>Änderungen</h1><p class="muted">Prüfe deine Änderungen und bereite den nächsten Commit vor.</p></div>
     <div class="changes-actions"><button class="btn" data-top-act="rollback" ${blocked || !tracked || !snap?.head ? "disabled" : ""}>${icon("undo",14)} Rollback …</button></div></header>`);
+  if(ctx.mergeError)wrap.insertAdjacentHTML('beforeend',`<p class="merge-inline-error" role="alert">${esc(ctx.mergeError)}</p>`);
   const mergingBanner = st.merging
     ? h`<div class="banner error">${icon("merge", 15)}
         <b>Merge noch nicht abgeschlossen.</b> ${st.conflicts.length ? m`${st.conflicts.length} Datei(en) mit Konflikten. Löse diese zuerst.` : t("Alle Konflikte sind gelöst. „Merge abschließen“ erstellt den Merge-Commit. Danach kannst du pushen.")}
@@ -118,6 +121,9 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
             : h`<button class="btn primary" data-top-act="resolve-first">Konflikte lösen</button>`
         }</span></div>`
     : "";
+  const current=ctx.branches?.().find(branch=>branch.is_current);
+  if(st.merging)wrap.insertAdjacentHTML('beforeend',h`<p class="merge-steps">Konflikte lösen → Merge abschließen → Pushen</p>`);
+  else if(current?.ahead)wrap.insertAdjacentHTML('beforeend',h`<div class="banner"><span>Commit erstellt · noch nicht gepusht</span><button class="btn primary" data-top-act="push">Pushen</button></div>`);
   if (mergingBanner) wrap.insertAdjacentHTML("beforeend", mergingBanner);
   const section = (
     title: string,
@@ -322,6 +328,7 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
       }
       case "merge-abort":
         return ctx.mergeAbort();
+      case "push": ctx.push?.(); break;
       case "merge-continue":
         return ctx.mergeContinue();
       case "resolve-first": {

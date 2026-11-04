@@ -268,8 +268,8 @@ export const api = {
     call<FileDiff>("compare_diff", { rev_a: revA, rev_b: revB, path }),
 
   conflictData: (path: string) => call<ConflictData>("conflict_data", { path }),
-  saveConflict: (path: string, text: string, markResolved: boolean) =>
-    call<CommandResult>("save_conflict", { path, text, mark_resolved: markResolved }),
+  saveConflict: (path: string, text: string, markResolved: boolean, expected?:ConflictData) =>
+    call<CommandResult>("save_conflict", { path, text, mark_resolved: markResolved,expected_working:expected?.merged.text,expected_sources:expected ? [expected.base.text,expected.ours.text,expected.theirs.text] : null }),
   resolveWithSide: (path: string, side: "ours" | "theirs") =>
     call<CommandResult>("resolve_with_side", { path, side }),
   standaloneData: () => call<ConflictData | null>("standalone_data"),

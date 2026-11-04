@@ -529,8 +529,28 @@ pub fn save_conflict(
     path: String,
     text: String,
     mark_resolved: bool,
+    expected_working: Option<String>,
+    expected_sources: Option<Vec<String>>,
 ) -> Result<CommandResult, String> {
     let g = git_of(&state)?;
+    if expected_working.as_ref().is_some_and(|expected| {
+        g.working_file(&path)
+            .map(|(text, _)| text)
+            .unwrap_or_default()
+            != *expected
+    }) || expected_sources.as_ref().is_some_and(|expected| {
+        let actual: Vec<String> = ["1", "2", "3"]
+            .iter()
+            .map(|stage| {
+                g.blob(&format!(":{stage}:{path}"))
+                    .map(|(text, _)| text)
+                    .unwrap_or_default()
+            })
+            .collect();
+        *expected != actual
+    }) {
+        return Err("Datei wurde außerhalb des Editors geändert. Lade den Konflikt erneut, bevor du speicherst.".into());
+    }
     if ["2", "3"].iter().any(|stage| {
         g.blob(&format!(":{stage}:{path}"))
             .is_some_and(|(text, binary)| binary || text.len() > MAX_FILE_BYTES)
@@ -711,7 +731,12 @@ pub fn checkout_branch(
 ) -> Result<CommandResult, String> {
     let g = git_of(&state)?;
     if update_from_remote.unwrap_or(false) {
-        return g.checkout_remote_update(&name, local_name.as_deref().ok_or("Lokaler Branch fehlt")?, expected_local.as_deref().ok_or("Lokaler Stand fehlt")?, expected_remote.as_deref().ok_or("Remote-Stand fehlt")?);
+        return g.checkout_remote_update(
+            &name,
+            local_name.as_deref().ok_or("Lokaler Branch fehlt")?,
+            expected_local.as_deref().ok_or("Lokaler Stand fehlt")?,
+            expected_remote.as_deref().ok_or("Remote-Stand fehlt")?,
+        );
     }
     g.checkout_branch(
         &name,
@@ -840,14 +865,18 @@ pub async fn fetch_remote(
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn pull(state: State<'_, AppState>, expected_branch: Option<String>, track_same_name: Option<bool>) -> Result<CommandResult, String> {
+pub async fn pull(
+    state: State<'_, AppState>,
+    expected_branch: Option<String>,
+    track_same_name: Option<bool>,
+) -> Result<CommandResult, String> {
     let g = git_of(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         g.prepare_pull(expected_branch.as_deref(), track_same_name.unwrap_or(false))?;
         Ok(utf8(g.raw(["pull", "--no-edit"])))
     })
-        .await
-        .map_err(|e| format!("Git-Auftrag fehlgeschlagen: {e}"))?
+    .await
+    .map_err(|e| format!("Git-Auftrag fehlgeschlagen: {e}"))?
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -955,8 +984,15 @@ pub fn commit(
     if message.trim().is_empty() && !amend.unwrap_or(false) {
         return Err("Commit-Nachricht ist leer".into());
     }
-    if !amend.unwrap_or(false) && !all.unwrap_or(false) && !g.merge_state() && g.status()?.staged.is_empty() {
-        return Err("Keine Dateien zum Commit vorgemerkt. Hake zuerst die gewünschten Änderungen an.".into());
+    if !amend.unwrap_or(false)
+        && !all.unwrap_or(false)
+        && !g.merge_state()
+        && g.status()?.staged.is_empty()
+    {
+        return Err(
+            "Keine Dateien zum Commit vorgemerkt. Hake zuerst die gewünschten Änderungen an."
+                .into(),
+        );
     }
     let mut args: Vec<String> = vec!["commit".into()];
     if amend.unwrap_or(false) {

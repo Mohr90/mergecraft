@@ -1,3 +1,4 @@
+import {analyzeConflict} from "../src/auto";
 import {detectLanguage,setLanguage,getLanguage,h,m,t,localizeText} from "../src/i18n";
 import { branchSync } from "../src/sync";
 import { askText, confirmDialog, toast } from "../src/ui";
@@ -112,7 +113,7 @@ const oneConflict=[{kind:'conflict',base:[0,1],ours:[0,1],theirs:[0,1]}];
 await test('auto resolve previews simple conflicts and does not write or overwrite decisions',async()=>{
   let writes=0;const editor=new MergeEditor({save:async()=>{writes++;return {ok:true,message:'ok'};},onSaved(){},onError(){},onClose(){}});
   const d=await conflictFixture('let x = 1; let y = 2;\n','let x = 10; let y = 2;\n','let x = 1; let y = 20;\n',oneConflict);
-  editor.load(d);editor.mount(fixture);click('[data-act="auto-resolve"]');
+  editor.load(d);editor.mount(fixture);assert(fixture.querySelector<HTMLButtonElement>('[data-act="auto-resolve"]')!.disabled,'same-line proposal treated as safe');click('[data-act="auto-region"]');
   assert(editor.resultText()==='let x = 10; let y = 20;\n','simple edit not combined');assert(writes===0,'auto resolve wrote file');
   assert(editor.hasUnsavedChanges(),'auto result not dirty');
   click('[data-act="accept-theirs-all"]');assert(editor.resultText()==='let x = 10; let y = 20;\n','bulk overwrote resolved result');
@@ -370,6 +371,42 @@ await test('lightweight tags have no type badge',async()=>{
   const tags=await mockInvoke('tags');
   fixture.append(renderTags({tags:()=>tags,snapshot:()=>({head:'x'} as any),compareTag(){},showTagCommit(){},newFromTag(){}},{query:'',scope:'all',sort:'recent',scrollTop:0}));
   assert(!fixture.querySelector('[data-tag-name="snapshot/ui"] .chip'),'lightweight tag badge remains');
+});
+await test('auto analysis separates reviewed same-line suggestions from unambiguous proposals',()=>{
+ assert(analyzeConflict(['x=1; y=2;'],['x=10; y=2;'],['x=1; y=20;'])?.kind==='review','same-line edits claimed safe');
+ assert(analyzeConflict(['a','middle','b'],['A','middle','b'],['a','middle','B'])?.kind==='safe','separate edits unavailable');
+ assert(analyzeConflict(['x'],['y'],['z'])===null,'overlap guessed');
+ assert(analyzeConflict([],['x'],['y'])===null,'competing insertions guessed');
+});
+await test('file navigation restores decisions, free text, scroll and undo without writing files',async()=>{
+ let writes=0;const editor=new MergeEditor({save:async()=>{writes++;return {ok:true,message:'ok'};},onSaved(){},onError(){},onClose(){}});
+ const a=await conflictFixture('base\n','ours\n','theirs\n',oneConflict);a.path='first.txt';
+ const b={...a,path:'second.txt'};
+ editor.load(a);editor.mount(fixture);click('[data-act="take-ours"]');const chosen=editor.resultText();editor.stash();
+ editor.load(b);editor.mount(fixture);click('[data-act="take-theirs"]');editor.stash();
+ editor.load(a);editor.mount(fixture);assert(editor.resultText()===chosen,'decision lost across files');
+ click('[data-act="undo"]');assert(editor.resultText().includes('<<<<<<<'),'undo lost across files');assert(writes===0,'navigation wrote file');
+ editor.clearDrafts();
+});
+
+
+await test('Auto Resolve previews a safe batch, preserves manual choices and undoes the batch once',async()=>{
+ let writes=0;const editor=new MergeEditor({save:async()=>{writes++;return {ok:true,message:'ok'};},onSaved(){},onError(){},onClose(){}});
+ const regions=[{kind:'conflict',base:[0,3],ours:[0,3],theirs:[0,3]},{kind:'conflict',base:[3,3],ours:[3,3],theirs:[3,3]},{kind:'conflict',base:[6,1],ours:[6,1],theirs:[6,1]}];
+ editor.load(await conflictFixture('a\nmiddle\nb\nc\nmiddle2\nd\nlast\n','A\nmiddle\nb\nC\nmiddle2\nd\nours\n','a\nmiddle\nB\nc\nmiddle2\nD\ntheirs\n',regions));editor.mount(fixture);
+ (fixture.querySelectorAll<HTMLElement>('[data-act="take-ours"]')[2]).click();const before=editor.resultText();
+ click('[data-act="auto-resolve"]');assert(editor.resultText()===before,'preview changed content');
+ (document.querySelector('dialog [data-i="1"]') as HTMLElement).click();await new Promise(resolve=>setTimeout(resolve,0));
+ assert(!editor.resultText().includes('<<<<<<<')&&editor.resultText().endsWith('ours\n'),'batch lost manual choice');
+ click('[data-act="undo"]');assert(editor.resultText()===before,'batch required multiple undo operations');assert(writes===0,'preview wrote files');
+});
+await test('large proposals are analyzed by a worker and leave the file untouched',async()=>{
+ let writes=0;const editor=new MergeEditor({save:async()=>{writes++;return {ok:true,message:'ok'};},onSaved(){},onError(){},onClose(){}});
+ const base='a'.repeat(6000)+'\nmiddle\nb\n';const ours='A'.repeat(6000)+'\nmiddle\nb\n';const theirs='a'.repeat(6000)+'\nmiddle\nB\n';
+ editor.load(await conflictFixture(base,ours,theirs,[{kind:'conflict',base:[0,3],ours:[0,3],theirs:[0,3]}]));editor.mount(fixture);
+ assert((editor as any).worker,'large analysis ran on UI thread');
+ for(let attempt=0;attempt<100&&!fixture.querySelector('.auto-suggestion');attempt++)await new Promise(resolve=>setTimeout(resolve,10));
+ assert(fixture.querySelector('.auto-suggestion'),'background proposal did not arrive');assert(writes===0,'analysis wrote file');editor.clearDrafts();
 });
 document.querySelector('#results')!.textContent = results.join('\n');
 document.title = results.some(r=>r.startsWith('FAIL')) ? 'FAIL' : 'PASS';

@@ -90,6 +90,7 @@ const bridge=require('./mock-bridge.cjs');
   await page.locator('.merge [data-act="redo"]').click();
   assert.equal(await page.evaluate(()=>window.mergecraft.mergeEditor.resultText()),chosen,'redo history lost');
   await capture('mergecraft-english-merge');
+  await page.locator('.merge-tools').evaluate(node=>node.open=true);
   await page.locator('.merge [data-act="raw"]').click();
   await page.locator('.merge .raw-edit').fill('Arbeitskopie / Änderungen remain source text\n');
   await language('de');await language('en');
