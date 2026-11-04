@@ -611,3 +611,31 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .about-brand p { margin:0; font-size:13px; color:var(--fg-3); }
 .version-status { font-size:13px; color:var(--fg-2); line-height:1.5; margin:0 0 24px; }
 @media(max-width:1000px) { .rail .app-info-button { justify-content:center; padding:6px; } .rail .app-info-button span { display:none; } }
+
+/* Merge workspace: quiet secondary actions and more room for the result. */
+.merge-direction { padding:10px 18px; border-bottom:1px solid var(--line); font-size:13px; }
+.merge .pane-heads,.merge .region { grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) minmax(0,1fr); }
+.merge-tools { position:relative; }
+.merge-tools summary { cursor:pointer; padding:8px; list-style:none; }
+.merge-tools[open] { padding:8px; border:1px solid var(--line); border-radius:12px; background:var(--bg-2); }
+.merge-tools[open] .btn { display:block; margin-top:4px; }
+
+.merge .pane-heads,.merge .region { grid-template-columns:minmax(0,1fr) minmax(0,var(--merge-result-width,42%)) minmax(0,1fr); }
+.merge-workspace { display:flex; flex:1; min-height:0; overflow:hidden; }
+.merge-workspace .panes { flex:1; min-width:0; }
+.merge-files { width:190px; flex:none; overflow:auto; padding:10px; border-right:1px solid var(--line); }
+.merge-file { display:block; text-align:left; width:100%; padding:10px; border:0; border-radius:8px; background:transparent; color:var(--fg); }
+.merge-file span { display:block; overflow-wrap:anywhere; }
+.merge-file small { display:block; color:var(--fg-3); margin-top:4px; }
+.merge-file[aria-current=true] { background:var(--accent-soft); }
+.merge-direction { display:flex; flex-wrap:wrap; align-items:center; gap:16px; }
+.merge-steps { color:var(--fg-3); font-size:12px; }
+.merge-width { display:flex; gap:8px; align-items:center; margin-left:auto; }
+.auto-summary,.proposal-reason { color:var(--fg-3); font-size:12px; margin:6px 16px; }
+.merge-inline-error { color:var(--red); padding:10px 16px; }
+.merge-tools { z-index:5; }
+.merge-tools[open] { position:absolute; right:48px; top:50px; box-shadow:var(--shadow); background:var(--bg-2); }
+@media(max-width:1000px) { .merge-files { width:140px; } .merge-steps { width:100%; } }
+@media(max-width:768px) { .merge-workspace { flex-direction:column; } .merge-files { width:100%; max-height:100px; border-right:0; } .merge-width { display:none; } }
+
+.merge .merge-head { position:relative; z-index:20; overflow:visible; }

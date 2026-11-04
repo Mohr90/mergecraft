@@ -79,7 +79,11 @@ mod tests {
     fn detects_clean_merge() {
         let b = split_lines("a\nb\nc\nd\ne\n");
         assert_eq!(
-            git_reports_conflict(&b, &split_lines("a\nB\nc\nd\ne\n"), &split_lines("a\nb\nc\nD\ne\n")),
+            git_reports_conflict(
+                &b,
+                &split_lines("a\nB\nc\nd\ne\n"),
+                &split_lines("a\nb\nc\nD\ne\n")
+            ),
             Some(false)
         );
     }
@@ -88,7 +92,11 @@ mod tests {
     fn handles_duplicated_lines() {
         let b = split_lines("l0\nl1\nl2\n");
         assert_eq!(
-            git_reports_conflict(&b, &split_lines("l0\nl1\n"), &split_lines("l0\nnew2\nl1\nl1\nl2\n")),
+            git_reports_conflict(
+                &b,
+                &split_lines("l0\nl1\n"),
+                &split_lines("l0\nnew2\nl1\nl1\nl2\n")
+            ),
             Some(false)
         );
     }

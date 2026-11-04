@@ -8,10 +8,14 @@ use mergecraft_core::merge::Kind;
 use mergecraft_core::model::ConflictData;
 
 fn json_on() -> bool {
-    std::env::var("MERGECRAFT_DIAG_JSON").map(|v| v == "1").unwrap_or(false)
+    std::env::var("MERGECRAFT_DIAG_JSON")
+        .map(|v| v == "1")
+        .unwrap_or(false)
 }
 fn write_on() -> bool {
-    std::env::var("MERGECRAFT_DIAG_WRITE").map(|v| v == "1").unwrap_or(false)
+    std::env::var("MERGECRAFT_DIAG_WRITE")
+        .map(|v| v == "1")
+        .unwrap_or(false)
 }
 
 pub fn run(args: &[String], standalone: Option<StandaloneMerge>) -> i32 {
@@ -48,7 +52,10 @@ fn dump_repo(path: &str, file: Option<&str>) -> i32 {
                 s.head.get(..12).unwrap_or(&s.head),
                 s.head_branch.clone().unwrap_or_else(|| "detached".into())
             );
-            println!("Kopf-Commit: {}", g.status().map(|st| st.head_subject).unwrap_or_default());
+            println!(
+                "Kopf-Commit: {}",
+                g.status().map(|st| st.head_subject).unwrap_or_default()
+            );
             println!(
                 "Zustand:    merge={} rebase={} cherry-pick={}",
                 s.merging, s.rebasing, s.cherry_picking
@@ -59,16 +66,22 @@ fn dump_repo(path: &str, file: Option<&str>) -> i32 {
 
     match g.branches() {
         Ok(bs) => {
-            println!("Branches:   {} ({} lokal, {} remote)", bs.len(),
+            println!(
+                "Branches:   {} ({} lokal, {} remote)",
+                bs.len(),
                 bs.iter().filter(|b| !b.is_remote).count(),
-                bs.iter().filter(|b| b.is_remote).count());
+                bs.iter().filter(|b| b.is_remote).count()
+            );
             for b in bs.iter().filter(|b| !b.is_remote) {
                 println!(
                     "  {}{}  {}{}{}",
                     if b.is_current { "* " } else { "  " },
                     b.name,
                     b.short_hash,
-                    b.upstream.as_ref().map(|u| format!("  → {u}")).unwrap_or_default(),
+                    b.upstream
+                        .as_ref()
+                        .map(|u| format!("  → {u}"))
+                        .unwrap_or_default(),
                     if b.ahead + b.behind > 0 {
                         format!("  ↑{} ↓{}", b.ahead, b.behind)
                     } else {
@@ -84,10 +97,17 @@ fn dump_repo(path: &str, file: Option<&str>) -> i32 {
         Ok(st) => {
             println!(
                 "Arbeitskopie: {} gestaged, {} geändert, {} unversioniert, {} ungelöst",
-                st.staged.len(), st.changed.len(), st.untracked.len(), st.conflicts.len()
+                st.staged.len(),
+                st.changed.len(),
+                st.untracked.len(),
+                st.conflicts.len()
             );
             for c in &st.conflicts {
-                println!("  KONFLIKT  {:<4} {}", c.conflict_code.clone().unwrap_or_default(), c.path);
+                println!(
+                    "  KONFLIKT  {:<4} {}",
+                    c.conflict_code.clone().unwrap_or_default(),
+                    c.path
+                );
             }
         }
         Err(e) => println!("Arbeitskopie: nicht lesbar ({e})"),
@@ -135,8 +155,12 @@ fn dump_standalone(sm: &StandaloneMerge) -> i32 {
     println!("Standalone-Merge: {}", data.path);
     println!(
         "  lokal={} ({} Zeilen)  basis={} ({} Zeilen)  eingehend={} ({} Zeilen)",
-        data.ours.exists, data.ours.lines, data.base.exists, data.base.lines,
-        data.theirs.exists, data.theirs.lines
+        data.ours.exists,
+        data.ours.lines,
+        data.base.exists,
+        data.base.lines,
+        data.theirs.exists,
+        data.theirs.lines
     );
     print_regions(&data);
     if json_on() {
@@ -187,7 +211,12 @@ fn print_regions(data: &ConflictData) {
         };
         println!(
             "   #{i:<3} {tag:<13} basis {:>4}+{:<3} lokal {:>4}+{:<3} eingehend {:>4}+{:<3}",
-            r.base.0 + 1, r.base.1, r.ours.0 + 1, r.ours.1, r.theirs.0 + 1, r.theirs.1
+            r.base.0 + 1,
+            r.base.1,
+            r.ours.0 + 1,
+            r.ours.1,
+            r.theirs.0 + 1,
+            r.theirs.1
         );
     }
     if data.ours.binary || data.theirs.binary {

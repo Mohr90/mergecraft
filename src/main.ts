@@ -42,6 +42,7 @@ const EMPTY_STATUS: RepoStatus = {
 };
 
 class App implements PanelCtx {
+  mergeError="";
   private updates = new Updates(() => {
     this.root.querySelectorAll("[data-app-info]").forEach(button => { button.outerHTML = this.updates.button(); });
   });
@@ -100,11 +101,11 @@ class App implements PanelCtx {
       this.root.querySelectorAll<HTMLDetailsElement>("details.branch-more[open]").forEach(menu => { if (!menu.contains(e.target as Node)) menu.open = false; });
     });
     this.mergeEditor = new MergeEditor({
-      save: async (text, markResolved) => {
+      save: async (text, markResolved, expected) => {
         try {
           const r = this.standalone
             ? await api.standaloneSave(text)
-            : await api.saveConflict(this.mergePath, text, markResolved);
+            : await api.saveConflict(this.mergePath, text, markResolved,expected);
           return { ok: r.ok, message: r.stdout || r.stderr || t("gespeichert") };
         } catch (e) {
           return { ok: false, message: String(e) };
@@ -208,6 +209,7 @@ class App implements PanelCtx {
         api.tags(),
       ]);
       if (this.snap?.root !== snap.root) {
+        this.mergeEditor.clearDrafts();this.mergeError="";
         this.previewSelection=null; this.historyPath=null; ++this.previewRequest;
       }
       this.snap = snap;
@@ -827,22 +829,17 @@ class App implements PanelCtx {
 
   async openMerge(path: string) {
     if(this.mergeEditor.isSaving()){toast(t("Speichern läuft noch. Bitte kurz warten."),"info");return;}
+    this.mergeEditor.setScope(`${this.snap?.root}:${this.snap?.head}`);
     const request=++this.mergeRequest,root=this.snap?.root;
-    if (
-      this.overlay === "merge" &&
-      this.mergeEditor.hasUnsavedChanges()
-    ) {
-      const ok = await confirmDialog(
-        t("Nächsten Konflikt bearbeiten?"),
-        t("Der aktuelle enthält ungespeicherte Änderungen."),
-        t("Ohne Speichern weiter"),
-      );
-      if (!ok||request!==this.mergeRequest||root!==this.snap?.root) return;
-      this.mergeEditor.discardChanges();
-    }
+    if(this.overlay === "merge") this.mergeEditor.stash();
     try {
       const data = await api.conflictData(path);
       if(request!==this.mergeRequest||root!==this.snap?.root)return;
+      if(this.mergeEditor.hasStaleDraft(data)) {
+        if(!await confirmDialog(t('Datei wurde außerhalb des Editors geändert'),t('Dein Entwurf bleibt erhalten. Neu laden verwirft nur diesen Entwurf und zeigt den aktuellen Dateistand.'),t('Neu laden')))return;
+        if(request!==this.mergeRequest||root!==this.snap?.root)return;
+        this.mergeEditor.dropDraft(path);
+      }
       this.mergePath = path;
       this.showMerge(data);
     } catch (e) {
@@ -1144,12 +1141,16 @@ class App implements PanelCtx {
     if(!ok||root!==this.snap?.root||head!==this.snap?.head||!this.snap.merging)return;
     let aborted=false;
     await this.run(t("Merge abbrechen"),async()=>{const result=await api.mergeAbort();aborted=result.ok;return result;});
-    if(aborted&&root===this.snap?.root&&!this.snap.merging){this.mergeEditor.discardChanges();this.overlay="none";this.tab="changes";this.render();}
+    if(aborted&&root===this.snap?.root&&!this.snap.merging){this.mergeEditor.clearDrafts();this.mergeEditor.discardChanges();this.overlay="none";this.tab="changes";this.render();}
   }
 
   mergeContinue() {
     if (this.statusData.conflicts.length) { toast(t("Löse zuerst alle Konfliktdateien."), "err"); return; }
-    void this.run(t("Merge abschließen"), () => api.mergeContinue());
+    this.mergeError="";
+    void this.run(t("Merge abschließen"), async () => {
+      try {const result=await api.mergeContinue();if(result.ok)this.mergeEditor.clearDrafts();else this.mergeError=result.stderr||result.stdout;return result;}
+      catch(error){this.mergeError=String(error);throw error;}
+    });
   }
 
   async runMerge(label: string, fn: () => Promise<MergeOutcome>) {

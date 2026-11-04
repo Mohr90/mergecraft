@@ -63,3 +63,14 @@ export function simpleConflictResolution(base:string[],left:string[],right:strin
  if(!base.length||!left.length||!right.length)return null;
  return combine(base,left,right);
 }
+
+export interface Proposal { lines:string[]; kind:'safe'|'review'; reason:'same'|'one-side'|'separate'|'characters'; }
+export function analyzeConflict(base:string[],left:string[],right:string[]):Proposal|null {
+ if(same(left,right))return {lines:[...left],kind:'safe',reason:'same'};
+ if(same(base,left)||same(base,right))return {lines:same(base,left)?[...right]:[...left],kind:'safe',reason:'one-side'};
+ if(!base.length||!left.length||!right.length)return null;
+ const safe=combine(base,left,right);
+ if(safe!==null)return {lines:safe,kind:'safe',reason:'separate'};
+ const proposal=simpleConflictResolution(base,left,right);
+ return proposal===null ? null : {lines:proposal,kind:'review',reason:'characters'};
+}

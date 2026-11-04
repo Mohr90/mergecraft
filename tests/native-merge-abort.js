@@ -8,7 +8,7 @@
  try{
   await until(()=>document.querySelector('.branches-panel'));
   const before=await invoke('snapshot');const stashes=(await invoke('stashes')).length;
-  await app.openMerge('auto.txt');click('[data-act="auto-resolve"]');click('[data-act="save"]');await until(()=>!app.mergeEditor.hasUnsavedChanges());
+  await app.openMerge('auto.txt');click('[data-act="auto-region"]');click('[data-act="save"]');await until(()=>!app.mergeEditor.hasUnsavedChanges());
   await app.openMerge('left.txt');click('[data-act="take-theirs"]');click('[data-act="save-resolve"]');
   await until(async()=>!(await invoke('status')).conflicts.some(e=>e.path==='left.txt'));
   await until(()=>!app.mergeEditor.isSaving());await app.openMerge('right.txt');await until(()=>!document.querySelector('.shell.busy'));click('[data-act="take-ours"]');const selected=app.mergeEditor.resultText();

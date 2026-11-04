@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 — 2026-11-04
+
+- Merge workspace with file navigation, retained drafts and undo history, adjustable result width and branch direction.
+- Explainable automatic proposals distinguish unambiguous text combinations from same-line suggestions requiring review.
+- Background analysis for large conflict regions, explicit preview and grouped undo.
+- Inline errors and a visible resolve → commit → push workflow.
+
+
 ## 0.3.1 — 2026-11-04
 
 - German/English language controls with flags and native language names beside the appearance switch.
