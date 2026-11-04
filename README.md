@@ -30,7 +30,7 @@
 | --- | --- |
 | **Changes** | Review inline diffs, select files with staging checkboxes, create commits, amend the last commit, or roll back selected tracked files to HEAD. |
 | **Branches** | Search, filter and sort favorites, local branches and remote branches. Create, switch, compare and merge branches. |
-| **Merge editor** | Compare local, result and incoming text side by side. Accept either side or both, review automatic proposals, edit the result, and undo decisions. |
+| **Merge editor** | Navigate conflict files, keep drafts and undo history while switching, resize the result pane, and review explainable automatic proposals. |
 | **Tags & history** | Browse tags and commits, inspect changed files, compare revisions and follow a file's history. |
 | **Remotes** | Fetch, pull and push using your existing Git configuration and credential helpers. See unpublished commits and incoming changes. |
 
@@ -42,16 +42,45 @@ The interface supports **German and English**. Switch languages using the labele
 
 Switch immediately between **Deutsch** and **English** without reopening the repository. Drafts, filters, staging selections and merge-editor text/history stay in place. Dates and app-generated messages follow the selected language; your repository content and raw Git output are preserved.
 
-## Resolve conflicts with context
+## Follow a merge from conflict to push
 
-![Three-way conflict editor with local and incoming source panes and an editable result](docs/screenshots/mergecraft-merge.png)
+![Merge workspace showing main flowing into feature/refactor, three conflict files, and safe, review-required and manual regions](docs/screenshots/mergecraft-merge-overview.png)
 
-- **Accept local, incoming, or both** for an individual conflict; bulk actions preserve existing decisions.
-- **Auto Resolve** proposes compatible edits, including simple independent changes within a line or across multiple lines. Review each proposal before accepting it; overlapping and ambiguous edits stay manual.
-- **Undo / redo** decisions and text edits, or reset the current file's preview.
-- **Save** writes the result. **Save and mark resolved** also stages it. Unresolved conflict markers prevent marking a file resolved.
-- **Abort merge** uses `git merge --abort` for the running merge, including previously saved conflict resolutions. It does not rewrite completed merge commits. Git may be unable to reconstruct the original state if local changes existed before the merge.
-- Binary and non-UTF-8 files are handled as whole-side choices. Modify/delete conflicts also support deletion.
+**Incoming → current branch** stays visible above the three panes. The file list shows what remains open, what needs review and what is resolved. Give the result more space using the width control; decisions and text stay in place as you move between files.
+
+- **Auto Resolve** previews combinations of separate text ranges and explains why they can be combined. Accepting a batch preserves existing decisions and can be undone in one step.
+- **Review proposals** for independent edits within the same line individually. Overlaps and ambiguous edits require your decision. Automatic text combinations do not guarantee logically correct code.
+- **Accept left, accept right, edit, or left → right** for a single conflict. The last option concatenates both versions in the stated order.
+- **Save** keeps a partial result. **Apply & next file** saves and stages a resolved file. Conflict markers block resolution; stale worktree or index contents block overwriting external changes.
+- **Undo / redo**, reset the file preview, or **abort the running merge**. Abort includes saved resolutions; it does not undo completed merge commits. Git can be unable to restore the original state if local changes existed before the merge.
+
+Drafts and undo history are kept in memory for the current merge-editor session. Large conflict regions are analyzed in a background worker. Binary/non-UTF-8 files and modify/delete conflicts use explicit whole-side choices.
+
+<details>
+<summary>See the automatic preview and a proposal that needs review</summary>
+
+![Auto Resolve previews a separate-range combination before applying it](docs/screenshots/mergecraft-auto-resolve.png)
+
+![Same-line proposal expanded for individual review while a different conflict remains manual](docs/screenshots/mergecraft-review-proposal.png)
+
+</details>
+
+### Resolve → finish merge → push
+
+Resolving files prepares the result. **Finish merge** creates the merge commit. **Push** sends committed changes to the remote. Each step stays visible so a local preview cannot be mistaken for a published change.
+
+<details>
+<summary>See the resolved result, merge completion and pending push</summary>
+
+![All regions in the current file resolved, with the result ready to save](docs/screenshots/mergecraft-merge-resolved.png)
+
+![All three conflict files resolved and staged; Finish merge is the next action](docs/screenshots/mergecraft-finish-merge.png)
+
+![Merge committed locally with an explicit pending-push status](docs/screenshots/mergecraft-ready-to-push.png)
+
+</details>
+
+See the [merge workflow guide](docs/merging.md) for details.
 
 ## Review before you commit
 
@@ -70,7 +99,7 @@ Mergecraft currently targets Linux with GTK 3 and WebKitGTK 4.1. Windows and mac
 Download the `.deb` package from [Releases](https://github.com/Mohr90/mergecraft/releases), then install it on a compatible Debian/Ubuntu system:
 
 ```bash
-sudo apt install ./Mergecraft_0.3.1_amd64.deb
+sudo apt install ./Mergecraft_*.deb
 mergecraft /path/to/repository
 ```
 
@@ -93,7 +122,7 @@ npm ci
 npm run dev:web
 ```
 
-Open the local URL shown by Vite. Browser mode uses synthetic demo data and does not operate on a real repository. All screenshots in this README were captured in that demo/test mode; they contain no private repository data.
+Open the local URL shown by Vite. Browser mode uses synthetic demo data and does not operate on a real repository. Screenshots show the v0.4.0 interface using synthetic demo data, including a complete conflict-resolution tour. They contain no private repository data. The source version on `main` may be newer than the latest downloadable release.
 
 For the native application:
 

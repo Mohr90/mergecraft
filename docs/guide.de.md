@@ -31,13 +31,21 @@ Beim Wechsel zu einem Remote-Branch wird ein lokaler Tracking-Branch angelegt. E
 
 Checke zuerst den Zielbranch aus. Wähle dann beim Quellbranch **Mergen**, etwa `origin/master` in deinem Feature-Branch. Direkte lokale Merges nach `main` oder `master` werden in der GUI bewusst nicht angeboten; dafür ist ein Merge Request bzw. Pull Request auf dem Server vorgesehen.
 
-Bei Konflikten zeigt der Editor **Lokal · Ergebnis · Eingehend**. Übernimm je Bereich eine Seite, beide oder bearbeite den Ergebnistext. **Auto Resolve** liefert prüfbare Vorschläge für einfache, unabhängige Änderungen und lässt mehrdeutige Fälle offen. Die Vorschläge werden erst nach Übernahme Teil der Vorschau und erst nach Speichern auf die Platte geschrieben.
+Bei Konflikten zeigt der Editor **Aktueller Branch · Ergebnis · Eingehender Branch**. Die Richtung steht darüber, etwa `main → feature/refactor`. Links kannst du zwischen Konfliktdateien wechseln; Entscheidungen, Text, Scrollposition und Undo-Verlauf bleiben während dieser Editor-Sitzung erhalten. Über **Ergebnisbreite** passt du die Spalten an.
 
-- **Rückgängig/Wiederholen** gilt für Entscheidungen und Texte in der aktuellen Datei.
-- **Auswahl zurücksetzen** setzt die Vorschau dieser Datei auf ihren Öffnungszustand zurück.
-- **Speichern & als gelöst markieren** speichert und führt `git add` aus.
-- Nach allen Konflikten erstellt **Merge abschließen** den Merge-Commit. Danach kannst du pushen.
-- **Merge abbrechen** ruft `git merge --abort` auf. Auch gespeicherte Auflösungen gehören zum laufenden Merge. Bereits abgeschlossene Merge-Commits werden damit nicht rückgängig gemacht. Vor dem Merge vorhandene uncommittete Änderungen können Git die Wiederherstellung erschweren.
+![Dateiübersicht und Drei-Wege-Editor](screenshots/mergecraft-merge-overview.png)
+
+**Auto Resolve** unterscheidet eindeutig kombinierbare Textbereiche, prüfpflichtige Vorschläge und manuelle Entscheidungen. Die Vorschau erklärt die Kombination. Änderungen innerhalb derselben Zeile übernimmst du einzeln nach Prüfung. Das Ergebnis muss weiterhin fachlich geprüft werden.
+
+- **Links übernehmen**, **Rechts übernehmen** oder **Bearbeiten** entscheidet einen Bereich. **Links → rechts** hängt beide Fassungen in dieser Reihenfolge aneinander.
+- **Rückgängig/Wiederholen** gilt für Entscheidungen und Texte. Ein Auto-Resolve-Durchlauf lässt sich in einem Schritt zurücknehmen.
+- Unter **Weitere Aktionen** findest du das Zurücksetzen der Datei-Vorschau und **Merge abbrechen**.
+- **Speichern** schreibt einen Zwischenstand. **Übernehmen & nächste Datei** speichert und markiert die Datei mit `git add` als gelöst.
+- Extern geänderte Datei- oder Indexstände werden beim Speichern erkannt. Ein veralteter Entwurf wird erst nach deiner Entscheidung ersetzt.
+- Nach allen Konflikten erstellt **Merge abschließen** den Merge-Commit. Danach zeigt die App den noch ausstehenden **Push** an.
+- **Merge abbrechen** ruft `git merge --abort` auf und betrifft auch gespeicherte Auflösungen des laufenden Merges. Bereits abgeschlossene Merge-Commits werden damit nicht rückgängig gemacht. Vorher vorhandene lokale Änderungen können Git die Wiederherstellung erschweren.
+
+Die Screenshots verwenden ausschließlich Demo-Daten. Weitere Schritte sind im [Merge-Leitfaden](merging.md) beschrieben.
 
 ## Tastatur
 
