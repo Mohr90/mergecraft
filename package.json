@@ -1,12 +1,12 @@
 {
   "name": "mergecraft",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev:web": "vite",
     "build:web": "vite build",
-    "typecheck": "tsc --noEmit && node scripts/check-i18n.mjs",
+    "typecheck": "tsc --noEmit && node scripts/check-i18n.mjs && node scripts/check-release.mjs",
     "test:browser": "node scripts/test-browser.mjs",
     "dev": "tauri dev",
     "build": "tauri build",

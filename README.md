@@ -116,6 +116,10 @@ git config --global mergetool.mergecraft.cmd \
 git config --global mergetool.mergecraft.trustExitCode true
 ```
 
+## Updates
+
+Open **Mergecraft 0.3.0** below the language controls to view the installed version, check for updates or read release notes. Startup checks are optional and run at most once a day. User installations in `~/.local/bin/mergecraft` support verified, atomic updates; system installations use the Debian package manager. No automatic restart or Git changes are performed. See the [release and update guide](docs/releases.md).
+
 ## Built with
 
 **Rust + Tauri 2** for the native app and Git integration; **TypeScript + Vite** for the interface. UI messages use local translation catalogs; switching languages preserves commit drafts, Git staging, filters and unsaved merge edits. See the [i18n contributor guide](docs/i18n.md). The Rust core has randomized differential tests against `git merge-file`, regression tests and real-repository workflow tests. Browser tests cover the UI and mocked application flows; native fixtures exercise the actual Tauri/Git bridge.

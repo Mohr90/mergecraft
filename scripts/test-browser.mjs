@@ -23,7 +23,7 @@ try {
     await delay(100);
   }
   if (!ready) throw new Error('The browser test server did not start.');
-  for (const file of ['tests/browser.cjs','tests/i18n.cjs']) {
+  for (const file of ['tests/browser.cjs','tests/i18n.cjs','tests/updates.cjs']) {
     test = spawn(process.execPath, [file], { stdio: 'inherit', env: { ...process.env, MERGECRAFT_TEST_URL: url } });
     const code = await new Promise((resolve, reject) => {
       test.once('error', reject);

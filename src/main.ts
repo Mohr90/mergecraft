@@ -24,6 +24,8 @@ import { chooseRollback } from "./rollback";
 import { renderTags, type TagViewState } from "./tags";
 import { askText, confirmDialog, modal, esc, icon, toast, relocalizeToasts } from "./ui";
 
+import { Updates } from "./updates";
+
 type Tab = "changes" | "branches" | "history" | "console" | "tags";
 type Overlay = "none" | "merge" | "diff" | "compare";
 
@@ -40,6 +42,9 @@ const EMPTY_STATUS: RepoStatus = {
 };
 
 class App implements PanelCtx {
+  private updates = new Updates(() => {
+    this.root.querySelectorAll("[data-app-info]").forEach(button => { button.outerHTML = this.updates.button(); });
+  });
   historyPath: string | null = null;
   private previewSelection: {path:string;area:"staged"|"work"|"untracked"} | null = null;
   private previewRequest = 0;
@@ -84,6 +89,7 @@ class App implements PanelCtx {
 
   constructor(root: HTMLElement) {
     this.root = root;
+    this.root.addEventListener("click", event => { if ((event.target as HTMLElement).closest("[data-app-info]")) this.updates.open(); });
     let storedTheme: string | null = null;
     try { storedTheme = localStorage.getItem("mergecraft-theme"); localStorage.removeItem("mergecraft-reduced-transparency"); } catch { /* Preferences can work for this session without storage. */ }
     this.explicitTheme = storedTheme === "light" || storedTheme === "dark";
@@ -126,6 +132,7 @@ class App implements PanelCtx {
   // ----------------------------------------------------------- Lebenszyklus
 
   async boot() {
+    setTimeout(() => void this.updates.start(), 3000);
     window.addEventListener("beforeunload", e => {
       if (this.overlay === "merge" && (this.mergeEditor.hasUnsavedChanges()||this.mergeEditor.isSaving())) { e.preventDefault(); e.returnValue = ""; }
     });
@@ -516,7 +523,7 @@ class App implements PanelCtx {
     </div><div class="language-switch" role="group" aria-label="Sprache">
       <button type="button" data-language-choice="de" lang="de" aria-label="Deutsch" title="Deutsch" aria-pressed="${getLanguage()==='de'}"><img src="${deFlag}" alt="" width="18" height="12"><span class="language-name">Deutsch</span><span class="language-code" aria-hidden="true">DE</span></button>
       <button type="button" data-language-choice="en" lang="en" aria-label="English" title="English" aria-pressed="${getLanguage()==='en'}"><img src="${enFlag}" alt="" width="18" height="12"><span class="language-name">English</span><span class="language-code" aria-hidden="true">EN</span></button>
-    </div></div>`;
+    </div>${this.updates.button()}</div>`;
   }
 
   private changeLanguage(language: Language): void {

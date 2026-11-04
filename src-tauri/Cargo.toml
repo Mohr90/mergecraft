@@ -1,6 +1,6 @@
 [package]
 name = "mergecraft"
-version = "0.2.0"
+version = "0.3.0"
 description = "Mergecraft - Git-Client mit 3-Wege-Merge-Editor"
 edition = "2021"
 license = "MIT"
@@ -15,3 +15,8 @@ gtk = "0.18"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 mergecraft-core = { path = "../core" }
+
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+semver = "1"
+sha2 = "0.10"
+tempfile = "3"
