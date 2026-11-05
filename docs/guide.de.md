@@ -69,3 +69,12 @@ mergecraft --diag /pfad/zum/repo src/main.rs
 ```
 
 Die Diagnose kann Dateinamen, Commit-Texte und Remote-Adressen enthalten. Prüfe die Ausgabe, bevor du sie in einem öffentlichen Issue teilst.
+
+
+## Syntaxfarben und Projektfavoriten (v0.5.0)
+
+Diffs und Merge-Spalten zeigen Syntaxfarben für Java, TypeScript/JavaScript, JSON, Rust, CSS, HTML/XML, Python und Shell. Die Farben beschreiben Textsyntax; sie prüfen keine fachliche Korrektheit. Zeilen- und Wortmarkierungen von Git bleiben sichtbar. Unbekannte Dateitypen und Inhalte über 200.000 Zeichen oder 6.000 Zeilen erscheinen als Klartext.
+
+Bei **Öffnen** findest du angeheftete und zuletzt verwendete Repositories. Mit dem Stern heftest du ein Projekt an oder löst es wieder. Der Pfad unterscheidet gleichnamige Ordner. Favoriten bleiben nach einem Neustart erhalten; Ansicht, Filter und Commit-Entwurf werden beim Zurückwechseln innerhalb derselben App-Sitzung wiederhergestellt. Bei ungespeicherten Merge-Entscheidungen greift weiterhin die Rückfrage vor dem Verlassen. Git-Änderungen werden beim Projektwechsel nicht verworfen.
+
+Die weiteren vier Verbesserungen sind für v1.0.0 vorgemerkt: [Roadmap](roadmap.md).
