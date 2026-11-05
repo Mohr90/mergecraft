@@ -3,6 +3,7 @@ import { t, h, m, localizeText } from "./i18n";
 // lokal | Ergebnis | eingehend, Konflikt für Konflikt entscheidbar.
 
 import type { ConflictData, Highlights, Region, WordSpan } from "./api";
+import { SyntaxDocument, syntaxText, colorEditor } from "./syntax";
 import { analyzeConflict, type Proposal } from "./auto";
 export { simpleConflictResolution } from "./auto";
 import { confirmDialog, el, esc, icon } from "./ui";
@@ -63,6 +64,8 @@ export class MergeEditor {
 
   private data!: ConflictData;
   private host!: MergeHost;
+  private syntaxOurs!:SyntaxDocument;
+  private syntaxTheirs!:SyntaxDocument;
   private oursLines: string[] = [];
   private theirsLines: string[] = [];
   private baseLines: string[] = [];
@@ -133,6 +136,8 @@ export class MergeEditor {
     this.current = -1;
     this.rawMode = false;
     this.jumpOpen = false;
+    this.syntaxOurs=new SyntaxDocument(data.path,data.ours.text);
+    this.syntaxTheirs=new SyntaxDocument(data.path,data.theirs.text);
     this.oursLines = splitLines(data.ours.text);
     this.theirsLines = splitLines(data.theirs.text);
     this.baseLines = splitLines(data.base.text);
@@ -265,7 +270,7 @@ export class MergeEditor {
     this.updateHeader();
     if (this.data.working_modified && this.root.querySelector('.grid')) {
       this.toggleRaw();
-      if (this.rawEl) { this.rawEl.value = this.data.merged.text;this.rawBefore=this.rawEl.value; }
+      if (this.rawEl) { this.rawEl.value = this.data.merged.text;this.rawEl.dispatchEvent(new Event("syntax-refresh"));this.rawBefore=this.rawEl.value; }
       this.updateDirtyState();
       const status = this.root.querySelector('.merge-foot .status');
       if (status) status.textContent = t("Vorhandene Arbeitsdatei geladen – bearbeite deine gespeicherte Fassung weiter.");
@@ -305,7 +310,7 @@ export class MergeEditor {
     const scroll=this.root.querySelector(".panes")?.scrollTop??0;
     this.res=new Map(state.res);this.current=state.current;this.rawMode=false;this.rawEl=null;this.nodes.clear();
     this.root.innerHTML="";this.root.appendChild(this.build());this.bindTextareas(this.root);
-    if(state.raw){this.toggleRaw();const raw=this.root.querySelector<HTMLTextAreaElement>(".raw-edit");if(raw){raw.value=state.text;this.rawBefore=state.text;}}
+    if(state.raw){this.toggleRaw();const raw=this.root.querySelector<HTMLTextAreaElement>(".raw-edit");if(raw){raw.value=state.text;raw.dispatchEvent(new Event("syntax-refresh"));this.rawBefore=state.text;}}
     this.touched=(this.root.querySelector<HTMLTextAreaElement>(".raw-edit")?.value??this.resultText())!==this.savedText;
     const panes=this.root.querySelector(".panes");if(panes)panes.scrollTop=scroll;
     this.typingKey="";this.updateHeader();
@@ -498,12 +503,12 @@ export class MergeEditor {
       area.dataset.region = String(i);
       area.rows = Math.max(1, this.shownResultLines(r, i).length);
       area.value = this.shownResultLines(r, i).join("\n");
-      block.appendChild(area);
+      block.appendChild(colorEditor(area,this.data.path));
       const proposal=res ? null : this.autoCandidate(i);
       const analysis=this.proposals.get(i);
       if(!res)block.insertAdjacentHTML('beforeend',`<p class="proposal-reason">${esc(analysis ? t(analysis.kind==='review'?'Vorschlag prüfen':'Eindeutig zusammenführbar')+' · '+this.reason(analysis) : t('Manuelle Entscheidung nötig'))}</p>`);
       if(proposal!==null) {
-        block.insertAdjacentHTML("beforeend",h`<details class="auto-suggestion"><summary>Automatischen Vorschlag ansehen</summary><pre>${esc(proposal.join("\n")||t("(leeres Ergebnis)"))}</pre><div><span>Noch nicht übernommen</span><button class="mini primary" data-act="auto-region">Vorschlag übernehmen</button></div></details>`);
+        block.insertAdjacentHTML("beforeend",h`<details class="auto-suggestion"><summary>Automatischen Vorschlag ansehen</summary><pre>${syntaxText(this.data.path,proposal.join("\n")||t("(leeres Ergebnis)"))}</pre><div><span>Noch nicht übernommen</span><button class="mini primary" data-act="auto-region">Vorschlag übernehmen</button></div></details>`);
       }
       resultCol.appendChild(block);
     } else {
@@ -513,9 +518,10 @@ export class MergeEditor {
         lines.length > 0 && r.kind !== "unchanged"
           ? `<span class="taken ${origin}">${origin === "theirs" ? t("← eingehend") : t("lokal →")}</span>`
           : "";
+      const resultSyntax=new SyntaxDocument(this.data.path,lines.join("\n"));
       lines.forEach((line, k) => {
         const ln = el("div", "line");
-        ln.innerHTML = `<span class="txt">${esc(line)}</span>${k === 0 ? chip : ""}`;
+        ln.innerHTML = `<span class="txt">${resultSyntax.line(k,line)}</span>${k === 0 ? chip : ""}`;
         if (r.kind === "ours_only" || r.kind === "both_same") ln.classList.add("from-ours");
         if (r.kind === "theirs_only") ln.classList.add("from-theirs");
         if (kindHints()[r.kind]) ln.title = kindHints()[r.kind];
@@ -545,11 +551,7 @@ export class MergeEditor {
       const num = start + k;
       const ln = el("div", "line");
       const spans: WordSpan[] | undefined = marks[String(num)];
-      const body = spans
-        ? spans
-            .map((s) => (s.changed ? `<span class="w">${esc(s.text)}</span>` : esc(s.text)))
-            .join("")
-        : esc(line);
+      const body=(side==="ours"?this.syntaxOurs:this.syntaxTheirs).line(num,line,spans);
       ln.innerHTML = `<span class="ln">${num + 1}</span><span class="txt">${body}</span>`;
       col.appendChild(ln);
     });
@@ -890,7 +892,7 @@ export class MergeEditor {
       this.rawEl = area;
       grid.innerHTML = "";
       grid.classList.add("raw");
-      grid.appendChild(area);
+      grid.appendChild(colorEditor(area,this.data.path));
     } else {
       if (this.rawEl && this.rawEl.value !== this.resultText()) {
         this.error(t("Die freie Fassung bleibt im Textmodus erhalten. Speichere sie hier; die Block-Ansicht kann freien Text nicht verlustfrei zuordnen."));

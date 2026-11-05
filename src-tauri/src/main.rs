@@ -48,9 +48,13 @@ fn main() {
             .ok()
     });
 
+    let mut recent = commands::load_recent();
+    if let Some(path) = root.as_deref() {
+        commands::remember_path(&mut recent, path);
+    }
     let state = AppState {
         root: Mutex::new(root),
-        recent: Mutex::new(commands::load_recent()),
+        recent: Mutex::new(recent),
         standalone: Mutex::new(standalone),
     };
 

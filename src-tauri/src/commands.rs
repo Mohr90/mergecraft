@@ -150,13 +150,16 @@ fn side_text(g: &Git, rev: &str, path: &str, label: &str) -> SideText {
 // ---------------------------------------------------------------- Repository
 
 /// Repository als geöffnet merken (zuletzt benutzte nach vorn, höchstens 12).
+pub fn remember_path(recent: &mut Vec<String>, root: &Path) {
+    let path = root.display().to_string();
+    recent.retain(|p| p != &path);
+    recent.insert(0, path);
+    recent.truncate(12);
+    save_recent(recent);
+}
+
 fn remember(state: &State<AppState>, root: &Path) {
-    let mut r = state.recent.lock().unwrap();
-    let s = root.display().to_string();
-    r.retain(|p| p != &s);
-    r.insert(0, s);
-    r.truncate(12);
-    save_recent(&r);
+    remember_path(&mut state.recent.lock().unwrap(), root);
 }
 
 #[tauri::command(rename_all = "snake_case")]

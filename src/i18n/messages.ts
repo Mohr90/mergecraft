@@ -1,5 +1,15 @@
 /** Source-language keys keep German messages next to their call sites. {{n}} slots contain opaque runtime values. */
 export const en = {
+  "{{0}} Öffnen {{1}}": "{{0}} Open {{1}}",
+  "{{0}} Anderes Repository öffnen …": "{{0}} Open another repository …",
+  "Projekte wechseln": "Switch projects",
+  "Projekte": "Projects",
+  "Angeheftet": "Pinned",
+  "Projekt lösen": "Unpin project",
+  "Projekt anheften": "Pin project",
+  "Anderes Repository öffnen …": "Open another repository …",
+  "Maximal 20 Projekte anheften": "Pin up to 20 projects",
+  "Projektfavoriten konnten nicht gespeichert werden": "Could not save pinned projects",
   "Datei wurde außerhalb des Editors geändert": "File changed outside the editor",
   "Dein Entwurf bleibt erhalten. Neu laden verwirft nur diesen Entwurf und zeigt den aktuellen Dateistand.": "Your draft is retained. Reload discards only this draft and shows the current file contents.",
   "Neu laden": "Reload",

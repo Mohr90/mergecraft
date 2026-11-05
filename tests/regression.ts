@@ -1,3 +1,4 @@
+import {SyntaxDocument,syntaxText,colorEditor} from "../src/syntax";
 import {analyzeConflict} from "../src/auto";
 import {detectLanguage,setLanguage,getLanguage,h,m,t,localizeText} from "../src/i18n";
 import { branchSync } from "../src/sync";
@@ -408,5 +409,33 @@ await test('large proposals are analyzed by a worker and leave the file untouche
  for(let attempt=0;attempt<100&&!fixture.querySelector('.auto-suggestion');attempt++)await new Promise(resolve=>setTimeout(resolve,10));
  assert(fixture.querySelector('.auto-suggestion'),'background proposal did not arrive');assert(writes===0,'analysis wrote file');editor.clearDrafts();
 });
+await test('syntax colors preserve exact source, multiline context, word ranges and escaped HTML',()=>{
+ const source='/* first\n second */\nconst total: number = 12;\nconst html = "<img src=x onerror=alert(1)>";\n';
+ const doc=new SyntaxDocument('sample.ts',source);
+ const lines=source.split('\n');
+ fixture.innerHTML=lines.map((line,i)=>`<div>${doc.line(i,line,i===2?[{text:'const ',changed:false},{text:'total',changed:true},{text:': number = 12;',changed:false}]:undefined)}</div>`).join('');
+ assert(fixture.querySelectorAll('.hljs-comment').length===2,'lost multiline comment context');
+ assert(fixture.querySelector('.hljs-keyword')?.textContent==='const','missing keyword');
+ assert(fixture.querySelector('.w')?.textContent==='total','Git word mark changed');
+ assert(fixture.querySelectorAll('img').length===0,'source became executable HTML');
+ assert(fixture.textContent===lines.join(''),'source text changed');
+ fixture.innerHTML=syntaxText('sample.ts','/* first\r\n second */\r\nconst x = 1;');assert(fixture.textContent==='/* first\r\n second */\r\nconst x = 1;','CRLF changed');assert(fixture.querySelectorAll('.hljs-comment').length===2,'CRLF lost multiline syntax');
+ fixture.innerHTML=syntaxText('Sample.java','public class Sample { int count = 42; }');
+ assert(!!fixture.querySelector('.hljs-keyword'),'Java not colored');
+ for(const [path,text] of [['unknown.file',source],['large.ts','x'.repeat(200001)]]){
+  fixture.innerHTML=syntaxText(path,text);assert(fixture.textContent===text,'fallback changed source');assert(!fixture.querySelector('span'),'fallback should be plain text');
+ }
+});
+await test('colored editable results retain native text and refresh after restored values',()=>{
+ const area=document.createElement('textarea');area.className='cf-edit';area.value='const x = 1;';fixture.append(colorEditor(area,'file.ts'));
+ assert(fixture.querySelector('.hljs-keyword')?.textContent==='const','no result colors');
+ area.value='const x = "<b>unchanged</b>";';area.dispatchEvent(new Event('input'));
+ assert(fixture.querySelector('.syntax-backdrop')?.textContent===area.value+'\n','decorative text not synchronized');
+ assert(area.value==='const x = "<b>unchanged</b>";','source mutated');
+ assert(!fixture.querySelector('b'),'editable source became HTML');
+ area.value='return 2;';area.dispatchEvent(new Event('syntax-refresh'));
+ assert(fixture.querySelector('.hljs-keyword')?.textContent==='return','restored result has stale colors');
+});
+
 document.querySelector('#results')!.textContent = results.join('\n');
 document.title = results.some(r=>r.startsWith('FAIL')) ? 'FAIL' : 'PASS';

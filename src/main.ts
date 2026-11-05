@@ -16,6 +16,7 @@ import {
 } from "./api";
 import { branchSync } from "./sync";
 import { canMergeInto } from "./workflow";
+import { openProjects } from "./projects";
 import { openBranchMenu } from "./branchmenu";
 import { DiffView } from "./diff";
 import { baseName, dirName, MergeEditor } from "./merge";
@@ -80,6 +81,8 @@ class App implements PanelCtx {
   private diffHost!: HTMLElement;
   private compareHost!: HTMLElement;
   private comparison: { a: string; b: string; label: string; files: FileChange[]; tag: boolean } | null = null;
+  private projectViews = new Map<string,{tab:Tab;branch:BranchViewState;tags:TagViewState;commit:{message:string;amend:boolean};historyPath:string|null}>();
+  private projectsRequest=0;
   private commitDraft = { message: "", amend: false };
   private statusbar!: HTMLElement;
   private branchTrigger!: HTMLButtonElement;
@@ -281,6 +284,9 @@ class App implements PanelCtx {
           break;
         case "open":
           void this.pickRepo();
+          break;
+        case "projects":
+          void this.showProjects((e.target as HTMLElement).closest("button")!);
           break;
         case "fetch":
           void this.run("Fetch", () => api.fetchRemote(null));
@@ -506,7 +512,7 @@ class App implements PanelCtx {
       ${s.cherry_picking ? h`<span class="chip merging">Cherry-pick läuft</span>` : ""}
       ${conflicts ? h`<span class="chip conflict">${conflicts} ${conflicts === 1 ? t("Konflikt") : t("Konflikte")}</span>` : ""}
       <span class="right row-actions-gap">
-        <button class="btn ghost" data-act="open" title="Anderes Repository öffnen">${icon("folder", 14)} Öffnen</button>
+        <button class="btn ghost" data-act="projects" title="Projekte wechseln" aria-label="Projekte wechseln" aria-haspopup="dialog" aria-expanded="false">${icon("folder", 14)} Öffnen ${icon("chevron",12)}</button>
         <span class="sep"></span>
         <button class="btn ghost" data-act="fetch" title="Remote-Branches aktualisieren (--all --prune)">${icon("fetch", 15)} Fetch</button>
         <button class="btn ghost" data-act="pull" title="Remote-Änderungen in den aktuellen Branch holen">${icon("pull", 15)} Pull</button>
@@ -749,6 +755,13 @@ class App implements PanelCtx {
     await this.refresh(true);
   }
 
+  private async showProjects(anchor:HTMLElement) {
+    const request=++this.projectsRequest;
+    const recent=await api.recentRepos().catch(()=>[] as string[]);
+    if(request!==this.projectsRequest||!anchor.isConnected||this.busy)return;
+    openProjects(anchor,recent,this.snap?.root??null,path=>void this.openRepo(path),()=>void this.pickRepo());
+  }
+
   private async pickRepo() {
     try {
       const path = await api.pickFolder(t("Repository wählen"));
@@ -764,9 +777,15 @@ class App implements PanelCtx {
 
   async openRepo(path: string, fromWelcome = false) {
     if (this.busy || !(await this.leaveMerge())) return;
+    this.captureCommitDraft();
+    const previous=this.snap?.root;
+    if(previous)this.projectViews.set(previous,{tab:this.tab,branch:{...this.branchView},tags:{...this.tagView},commit:{...this.commitDraft},historyPath:this.historyPath});
+    this.busy=true;
     try {
-      this.snap = await api.openRepo(path);
-      this.commitDraft = { message: "", amend: false };
+      const opened=await api.openRepo(path);
+      this.snap=opened;
+      const remembered=this.projectViews.get(opened.root);
+      this.commitDraft = remembered?.commit??{ message: "", amend: false };
       this.branchView = { query: "", scope: "all", sort: "recent", scrollTop: 0 };
       this.tagView = {query:"",scope:"all",sort:"recent",scrollTop:0};
       this.panelHost?.querySelector(".commit-box")?.remove();
@@ -774,7 +793,11 @@ class App implements PanelCtx {
       this.historyList = [];
       this.selected = null;
       this.selectedFiles = [];
-      this.tab = "branches";
+      this.tab = remembered?.tab??"branches";
+      this.branchView=remembered?.branch??this.branchView;
+      this.tagView=remembered?.tags??this.tagView;
+      this.historyPath=remembered?.historyPath??null;
+      this.mergeEditor.clearDrafts();
       this.overlay = "none";
       this.welcomeError = null;
       await this.refresh(true);
@@ -792,6 +815,7 @@ class App implements PanelCtx {
         toast(m`Kein Git-Repository: ${message}`, "err");
       }
     }
+    finally { this.busy=false; }
   }
 
   /** Repository anlegen, wenn im Ordner noch keines ist. */
