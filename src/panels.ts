@@ -467,9 +467,10 @@ function branchRow(b: BranchInfo, blocked: boolean, target: string, favorite = f
       ${!b.is_current ? h`<button class="btn" data-b-act="checkout" ${disabled}>Wechseln</button>
         <button class="btn" data-b-act="compare">Vergleichen</button>
         ${allowMerge ? h`<button class="btn primary" data-b-act="merge" ${disabled} title="In ${esc(target)} mergen">${icon("merge", 13)} Mergen</button>` : ""}` : ""}
+      ${!b.is_remote && !b.is_current ? h`<button class="icon-btn danger" data-b-act="delete" ${disabled} aria-label="Lokalen Branch ${esc(b.name)} löschen" title="Lokalen Branch löschen">${icon("trash",16)}</button>` : ""}
       <details class="branch-more"><summary aria-label="Weitere Aktionen für ${esc(b.name)}" aria-haspopup="menu" aria-expanded="false">${icon("more",16)}<span>Mehr</span></summary><div class="branch-more-menu" role="menu" aria-label="Aktionen für ${esc(b.name)}"><div class="branch-menu-heading">${esc(b.name)}</div>
         <button class="btn ghost" data-b-act="newfrom" role="menuitem" ${disabled}>Neuer Branch von hier</button>
-        ${!b.is_current ? `<button class="btn danger" data-b-act="delete" role="menuitem" ${disabled}>${b.is_remote ? t("Remote-Branch löschen") : t("Branch löschen")}</button>` : ""}
+        ${b.is_remote && !b.is_current ? `<button class="btn danger" data-b-act="delete" role="menuitem" ${disabled}>${b.is_remote ? t("Remote-Branch löschen") : t("Branch löschen")}</button>` : ""}
       </div></details>
     </div></div>`;
 }

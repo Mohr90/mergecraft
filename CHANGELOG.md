@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0 — 2026-11-06
+
+- Delete local branches directly from the branch list, with explicit confirmation for commits absent from the current branch.
+- Choose whether to keep local changes or preview a rollback before switching branches, including remote checkouts.
+- Review selected tracked and staged files before discarding. Untracked files remain protected by Git during checkout.
+- Move the remaining discovery, pre-merge comparison, conflict review and contextual history roadmap to v1.5.0.
+
 ## 0.5.0 — 2026-11-05
 
 - Read source changes with syntax colors for Java, TypeScript/JavaScript, JSON, Rust, CSS, HTML/XML, Python and shell files in diffs and the merge workspace.

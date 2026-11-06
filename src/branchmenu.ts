@@ -117,7 +117,7 @@ export function openBranchMenu(anchor: HTMLElement, branches: BranchInfo[], act:
                 ? h`<button class="mini quiet danger" data-act="delete-remote" data-idx="${idx}" title="Remote-Branch löschen">${icon("trash", 12)}</button>`
                 : b.is_current
                   ? ""
-                  : h`<button class="mini quiet danger" data-act="delete" data-idx="${idx}" title="Löschen">${icon("trash", 12)}</button>`
+                  : h`<button class="mini quiet danger" data-act="delete" data-idx="${idx}" title="Lokalen Branch löschen">${icon("trash", 12)}</button>`
             }
           </span>
         </div>`;

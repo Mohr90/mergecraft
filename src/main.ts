@@ -1002,16 +1002,42 @@ class App implements PanelCtx {
       if (!action || action==="cancel" || root!==this.snap?.root) return;
       update=action==="update";
     }
+    const head = this.snap?.head;
+    let discard: string[] | null = null;
+    try {
+      const status = await api.status();
+      if (root !== this.snap?.root || head !== this.snap?.head) return;
+      const files = status.all.filter(file => file.state !== "untracked" && file.state !== "conflicted");
+      if (files.length) {
+        const action = await modal(t("Lokale Änderungen beim Branchwechsel"), m`${files.length} Dateien haben lokale Änderungen. Wähle, wie du zu ${b.checkout_name} wechseln möchtest.`, [
+          {label:t("Abbrechen"),value:"cancel"},
+          {label:t("Änderungen verwerfen …"),value:"discard"},
+          {label:t("Änderungen mitnehmen"),value:"keep",primary:true},
+        ]);
+        if (!action || action === "cancel") return;
+        if (action === "discard") {
+          discard = await chooseRollback(files);
+          if (!discard?.length) return;
+        }
+      }
+    } catch (error) { toast(String(error), "err"); return; }
+    if (root !== this.snap?.root || head !== this.snap?.head || this.busy) return;
     toast(`${update ? t("Aktualisiere") : t("Wechsle zu")} ${b.name} …`, "info");
     await this.run(
       update ? m`Aktualisiere ${b.checkout_name} aus ${b.name}` : m`Wechsel zu ${local?.name ?? b.name}`,
-      () => api.checkout(local && !update ? local.name : b.name, {
+      async () => {
+        if (discard) {
+          const rollback = await api.rollback(discard, head!);
+          if (!rollback.ok) return rollback;
+        }
+        return api.checkout(local && !update ? local.name : b.name, {
         track: b.is_remote && !local,
         localName: b.is_remote ? b.checkout_name : undefined,
         updateFromRemote:update,
         expectedLocal:local?.short_hash,
         expectedRemote:b.short_hash,
-      }),
+      });
+      },
       !update,
     );
     if (this.snap?.head_branch === (b.is_remote ? b.checkout_name : b.name)) {
@@ -1034,16 +1060,22 @@ class App implements PanelCtx {
 
   private async deleteBranch(b: BranchInfo) {
     if (this.busy || b.is_current || this.gitOperationRunning()) return;
-    const ok = await confirmDialog(
-      m`Branch „${b.name}“ ${b.is_remote ? t("auf dem Remote ") : ""}löschen?`,
-      b.is_remote ? t("Entfernt den Branch auf dem Remote per push --delete.") : t("Nur vollständig gemergte Branches werden gelöscht. Ungemergte Commits bleiben geschützt."),
-      t("Löschen"),
-    );
-    if (!ok) return;
-    await this.run(t("Branch löschen"), async () => {
-      if (b.is_remote) return api.deleteBranch(b.name, false, true);
-      return api.deleteBranch(b.name, false, false);
-    });
+    const root = this.snap?.root;
+    try {
+      let force = false;
+      if (!b.is_remote) {
+        const ancestry = await api.gitRaw(["merge-base", "--is-ancestor", b.full_name, "HEAD"]);
+        if (!ancestry.ok && ancestry.code !== 1) throw new Error(ancestry.stderr || ancestry.stdout);
+        force = ancestry.code === 1;
+      }
+      const title = b.is_remote ? m`Remote-Branch „${b.name}“ löschen?` : m`Lokalen Branch „${b.name}“ löschen?`;
+      const detail = b.is_remote ? t("Entfernt den Branch auf dem Remote per push --delete.")
+        : force ? t("Dieser Branch enthält Commits, die nicht im aktuellen Branch enthalten sind. Beim Löschen können diese Commits unerreichbar werden. Vergleiche die Branches, wenn du sie noch benötigst.")
+        : t("Entfernt den lokalen Branch. Der Remote-Branch bleibt verfügbar.");
+      if (!await confirmDialog(title, detail, t(force ? "Branch samt eigenen Commits löschen" : "Löschen"))) return;
+      if (root !== this.snap?.root || this.busy) return;
+      await this.run(t("Branch löschen"), () => api.deleteBranch(b.name, force, b.is_remote, b.short_hash));
+    } catch (error) { toast(String(error), "err"); }
   }
 
   private async createBranch(from: Pick<BranchInfo,"name" | "checkout_name"> | null) {

@@ -1,5 +1,18 @@
 /** Source-language keys keep German messages next to their call sites. {{n}} slots contain opaque runtime values. */
 export const en = {
+  "Lokale Änderungen beim Branchwechsel": "Local changes when switching branches",
+  "{{0}} Dateien haben lokale Änderungen. Wähle, wie du zu {{1}} wechseln möchtest.": "{{0}} files have local changes. Choose how to switch to {{1}}.",
+  "Änderungen verwerfen …": "Discard changes …",
+  "Änderungen mitnehmen": "Keep changes",
+  "Remote-Branch „{{0}}“ löschen?": "Delete remote branch “{{0}}”?",
+  "Lokalen Branch „{{0}}“ löschen?": "Delete local branch “{{0}}”?",
+  "Dieser Branch enthält Commits, die nicht im aktuellen Branch enthalten sind. Beim Löschen können diese Commits unerreichbar werden. Vergleiche die Branches, wenn du sie noch benötigst.": "This branch contains commits absent from the current branch. Deleting it may make these commits unreachable. Compare the branches if you still need them.",
+  "Entfernt den lokalen Branch. Der Remote-Branch bleibt verfügbar.": "Removes the local branch. The remote branch remains available.",
+  "Branch samt eigenen Commits löschen": "Delete branch with its own commits",
+  "Lokalen Branch {{0}} löschen": "Delete local branch {{0}}",
+  "Lokalen Branch löschen": "Delete local branch",
+  "Wechsle zuerst auf einen anderen Branch.": "Switch to another branch first.",
+
   "Bereich wird analysiert …": "Analyzing change …",
   "Wähle die Bereiche für deinen Ergebnisentwurf.": "Select the changes to apply to your result draft.",
   "Auswahl übernehmen": "Apply selection",
