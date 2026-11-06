@@ -391,49 +391,11 @@ export function renderBranches(ctx: PanelCtx, state: BranchViewState = {query: "
   };
   const filterChanged = () => { state.scrollTop = 0; draw(); groups.scrollTop = 0; };
   search.addEventListener("input", filterChanged); scope.addEventListener("change", filterChanged); sort.addEventListener("change", filterChanged);
-  let menuAnchorScroll=groups.scrollTop;
-  groups.addEventListener("scroll", () => { state.scrollTop = groups.scrollTop;if(groups.scrollTop!==menuAnchorScroll)wrap.querySelectorAll<HTMLDetailsElement>(".branch-more[open]").forEach(menu=>menu.open=false);menuAnchorScroll=groups.scrollTop; });
-  const setMenuOpen=(menu:HTMLDetailsElement,open:boolean)=>{
-    menu.open=open;
-    const summary=menu.querySelector<HTMLElement>("summary")!;
-    summary.setAttribute("aria-expanded",String(open));
-    if(!open) return;
-    menuAnchorScroll=groups.scrollTop;
-    wrap.querySelectorAll<HTMLDetailsElement>("details.branch-more[open]").forEach(other=>{if(other!==menu){other.open=false;other.querySelector("summary")?.setAttribute("aria-expanded","false");}});
-    const popup=menu.querySelector<HTMLElement>(".branch-more-menu")!;
-    const rect=summary.getBoundingClientRect();
-    const width=Math.min(260,window.innerWidth-16);
-    popup.style.width=`${width}px`;popup.style.top="0px";
-    popup.style.left=`${Math.max(8,Math.min(rect.right-width,window.innerWidth-width-8))}px`;
-    const height=popup.getBoundingClientRect().height;
-    const top=rect.bottom+6+height>window.innerHeight-8 ? rect.top-height-6 : rect.bottom+6;
-    popup.style.top=`${Math.max(8,Math.min(top,window.innerHeight-height-8))}px`;
-    popup.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({preventScroll:true});
-  };
-  wrap.addEventListener("toggle",event=>{
-    const menu=event.target as HTMLDetailsElement;
-    if(menu.matches(".branch-more")) menu.querySelector("summary")?.setAttribute("aria-expanded",String(menu.open));
-  },true);
+  groups.addEventListener("scroll", () => { state.scrollTop = groups.scrollTop; });
   const noff = wrap.querySelector(".opt-noff") as HTMLInputElement;
   noff?.addEventListener("change", () => ctx.setMergeNoFF(noff.checked));
-  wrap.addEventListener("keydown",event=>{
-    const menu=(event.target as HTMLElement).closest<HTMLDetailsElement>(".branch-more");
-    if(!menu) return;
-    if(event.key==="Escape" && menu.open) {event.preventDefault();event.stopPropagation();setMenuOpen(menu,false);menu.querySelector<HTMLElement>("summary")!.focus({preventScroll:true});return;}
-    if(["ArrowDown","ArrowUp","Home","End"].includes(event.key)) {
-      event.preventDefault();
-      if(!menu.open) {setMenuOpen(menu,true);return;}
-      const buttons=[...menu.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
-      const current=buttons.indexOf(document.activeElement as HTMLButtonElement);
-      const next=event.key==="Home" ? 0 : event.key==="End" ? buttons.length-1 : (current+(event.key==="ArrowUp" ? -1 : 1)+buttons.length)%buttons.length;
-      buttons[next]?.focus({preventScroll:true});
-    }
-    if(event.key==="Tab" && menu.open) {setMenuOpen(menu,false);menu.querySelector<HTMLElement>("summary")!.focus({preventScroll:true});}
-  });
   wrap.addEventListener("click", e => {
     const target = e.target as HTMLElement;
-    const summary=target.closest<HTMLElement>(".branch-more summary");
-    if(summary) {e.preventDefault();const menu=summary.closest<HTMLDetailsElement>("details")!;setMenuOpen(menu,!menu.open);return;}
     if (target.closest('[data-branch-act="cleanup"]')) return ctx.cleanupBranches?.();
     if (target.closest('[data-branch-act="create"]')) return ctx.newFrom(null);
     if (target.closest('[data-branch-act="reset"]')) { search.value = ""; scope.value = "all"; filterChanged(); search.focus(); return; }
@@ -441,7 +403,6 @@ export function renderBranches(ctx: PanelCtx, state: BranchViewState = {query: "
     const name = (target.closest('.branch-row') as HTMLElement | null)?.dataset.name;
     const branch = all.find(b=>b.name === name);
     if (!button || button.disabled || !branch) return;
-    const menu=button.closest<HTMLDetailsElement>(".branch-more");if(menu)menu.open=false;
     switch(button.dataset.bAct) {
       case "favorite": return ctx.toggleFavorite?.(branch.name);
       case "checkout": return ctx.checkout(branch);
@@ -466,16 +427,18 @@ function branchRow(b: BranchInfo, blocked: boolean, target: string, favorite = f
       <div class="branch-meta"><span class="bsub" title="${esc(b.subject)}">${esc(b.subject || t("Kein Commit"))}</span>
       <span class="bdate" title="${esc(absTime(b.timestamp))}">${esc(b.short_hash)} · ${esc(relTime(b.timestamp))}</span></div>
       <span class="small muted">${b.upstream ? m`Verfolgt ${esc(b.upstream)}` : b.is_remote ? t("Remote · beim Wechsel lokal verfolgen") : t("Lokal · kein Upstream")}</span></div>
-    <div class="actions">
-      ${!b.is_current ? h`<button class="btn" data-b-act="checkout" ${disabled}>Wechseln</button>
-        <button class="btn" data-b-act="compare">Vergleichen</button>
-        ${allowMerge ? h`<button class="btn primary" data-b-act="merge" ${disabled} title="In ${esc(target)} mergen">${icon("merge", 13)} Mergen</button>` : ""}` : ""}
-      ${!b.is_remote && !b.is_current ? h`<button class="icon-btn danger" data-b-act="delete" ${disabled} aria-label="Lokalen Branch ${esc(b.name)} löschen" title="Lokalen Branch löschen">${icon("trash",16)}</button>` : ""}
-      <details class="branch-more"><summary aria-label="Weitere Aktionen für ${esc(b.name)}" aria-haspopup="menu" aria-expanded="false">${icon("more",16)}<span>Mehr</span></summary><div class="branch-more-menu" role="menu" aria-label="Aktionen für ${esc(b.name)}"><div class="branch-menu-heading">${esc(b.name)}</div>
-        <button class="btn ghost" data-b-act="newfrom" role="menuitem" ${disabled}>Neuer Branch von hier</button>
-        ${b.is_remote && !b.is_current ? `<button class="btn danger" data-b-act="delete" role="menuitem" ${disabled}>${b.is_remote ? t("Remote-Branch löschen") : t("Branch löschen")}</button>` : ""}
-      </div></details>
+    <div class="actions branch-actions">
+      ${!b.is_current ? branchAction("checkout", t("Wechseln"), "right", b.name, disabled) : ""}
+      ${!b.is_current ? branchAction("compare", t("Vergleichen"), "compare", b.name) : ""}
+      ${!b.is_current && allowMerge ? branchAction("merge", m`In ${target} mergen`, "merge", b.name, disabled) : ""}
+      ${branchAction("newfrom", t("Neuer Branch von hier"), "plus", b.name, disabled)}
+      ${!b.is_current ? branchAction("delete", t(b.is_remote ? "Remote-Branch löschen" : "Lokalen Branch löschen"), "trash", b.name, disabled, true) : ""}
     </div></div>`;
+}
+
+function branchAction(action:string, label:string, glyph:string, branch:string, disabled="", danger=false):string {
+  const description = label + " · " + branch;
+  return `<button class="icon-btn${danger ? " danger" : ""}" data-b-act="${action}" ${disabled} title="${esc(description)}" aria-label="${esc(description)}">${icon(glyph,16)}</button>`;
 }
 
 export function renderHistory(ctx: PanelCtx): HTMLElement {
