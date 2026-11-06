@@ -104,22 +104,11 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     await page.getByRole('button',{name:'Filter zurücksetzen'}).click();await page.evaluate(()=>window.testManyBranches=false);
     await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('.branch-row').length===9);
 
-    const nextRow=page.locator('.branch-row').nth(1);const beforeMenu=await nextRow.boundingBox();
-    await page.locator('.branch-more summary').nth(0).click();
-    assert.equal((await nextRow.boundingBox()).y,beforeMenu.y,'menu expanded the branch row');
-    const menu=page.locator('.branch-more[open] .branch-more-menu');
-    assert(await menu.evaluate(n=>{const r=n.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;}),'menu outside viewport');
-    await page.keyboard.press('End');assert.equal(await page.evaluate(()=>document.activeElement.dataset.bAct),'newfrom');
-    await page.keyboard.press('Escape');
-    assert(await page.locator('.branch-more summary').nth(0).evaluate(n=>n===document.activeElement),'Escape lost summary focus');
-    await page.locator('.branch-more summary').nth(0).click();await page.keyboard.press('Tab');
-    assert.equal(await page.locator('.branch-more[open]').count(),0,'Tab did not close menu');
-    assert(await page.evaluate(()=>document.activeElement!==document.body&&!document.activeElement.closest('.branch-more[open]')),'Tab lost focus');
-
-    await page.locator('.branch-more summary').nth(0).click();await page.locator('.branch-more summary').nth(1).click();
-    assert.equal(await page.locator('.branch-more[open]').count(),1);
-    assert.equal(await page.getByRole('button',{name:'Umbenennen',exact:true}).count(),0);
-    await page.keyboard.press('Escape');assert.equal(await page.locator('.branch-more[open]').count(),0);
+    assert.equal(await page.locator('.branch-more').count(),0,'redundant More menu remains');
+    const actionButtons=page.locator('.branch-row:not(.current) .branch-actions button');
+    assert(await actionButtons.evaluateAll(buttons=>buttons.every(button=>button.querySelector('svg')&&button.title&&button.getAttribute('aria-label'))),'icon actions missing accessible names or tooltips');
+    await actionButtons.first().focus();await page.keyboard.press('Tab');
+    assert(await actionButtons.evaluateAll(buttons=>buttons.includes(document.activeElement)),'icon action keyboard navigation lost focus');
     await page.getByRole('button',{name:'Historie',exact:true}).click();
     await page.evaluate(()=>{window.mergecraft.selectCommit('slow-test');window.mergecraft.selectCommit('fast-test');});
     await page.waitForTimeout(220);
@@ -250,7 +239,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     assert.match(await page.locator('.toasts').innerText(),/nichts Neues zu committen/);
     // Explicitly validate deletion stays non-forced.
     await page.getByRole('button',{name:'Branches',exact:true}).click();
-    const row=page.locator('.branch-row[data-name="main"]');await row.locator('summary').click();await row.locator('[data-b-act="delete"]').click();await page.locator('dialog [data-i="1"]').click();
+    const row=page.locator('.branch-row[data-name="main"]');await row.locator('[data-b-act="delete"]').click();await page.locator('dialog [data-i="1"]').click();
     await page.waitForFunction(()=>window.testCalls.some(c=>c.cmd==='delete_branch'));
     assert.equal(await page.evaluate(()=>window.testCalls.find(c=>c.cmd==='delete_branch').args.force),false);
     await page.waitForFunction(()=>!document.querySelector('.shell.busy'));

@@ -18,6 +18,7 @@ with tempfile.TemporaryDirectory(prefix="mergecraft-cleanup-") as directory:
     git("add", ".")
     git("commit", "-qm", "base")
     git("branch", "merged")
+    git("worktree", "add", "-b", "linked", str(root / "linked"))
     git("switch", "-qc", "own-work")
     (repo / "own.txt").write_text("own commit\n")
     git("add", ".")
@@ -43,4 +44,6 @@ with tempfile.TemporaryDirectory(prefix="mergecraft-cleanup-") as directory:
     assert git("branch", "--list", "own-work", "merged").strip() == b""
     assert git("symbolic-ref", "--short", "HEAD").strip() == b"task"
     assert git("rev-parse", "--abbrev-ref", "@{upstream}").strip() == b"origin/task"
+    assert git("branch", "--list", "linked").strip(), "linked worktree branch was deleted"
+    assert git("show-ref", "--verify", "refs/remotes/origin/task").strip()
     print(notes, flush=True)

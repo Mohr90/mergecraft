@@ -11,15 +11,10 @@
     const panelLeft=document.querySelector('.panel-wrap').getBoundingClientRect().left;
     assert(document.querySelector('.titlebar .brand').getBoundingClientRect().left<panelLeft,'brand not at upper left');
     assert(document.querySelector('.workspace-toolbar .repo-name').getBoundingClientRect().left>=panelLeft,'project context still above sidebar');
-    const firstRow=document.querySelector('.branch-row');const rowTop=firstRow.getBoundingClientRect().top;
-    click('.branch-more summary');await until(()=>document.querySelector('.branch-more[open]'));
-    const popup=document.querySelector('.branch-more[open] .branch-more-menu');const bounds=popup.getBoundingClientRect();
-    assert(firstRow.getBoundingClientRect().top===rowTop,'menu moved branch row');
-    assert(bounds.left>=0&&bounds.right<=innerWidth&&bounds.top>=0&&bounds.bottom<=innerHeight,'native menu outside viewport');
-    assert(popup.contains(document.elementFromPoint(bounds.left+20,bounds.top+20)),'native menu is clipped');
-    document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
-    assert(!document.querySelector('.branch-more[open]'),'Escape did not close native menu');
-    log.push('PASS native header layout and compact branch menu without row movement');
+    assert(!document.querySelector('.branch-more'),'redundant More menu remains');
+    const actions=[...document.querySelectorAll('.branch-actions button')];
+    assert(actions.every(button=>button.querySelector('svg')&&button.title&&button.getAttribute('aria-label')),'icon actions lack names/tooltips');
+    log.push('PASS native header layout and direct named branch icon actions');
 
     click('[data-branch-act="create"]');await until(()=>document.querySelector('dialog[open] input'));
     const input=document.querySelector('dialog input');input.value='feature/gui-test';click('dialog [data-v="ok"]');

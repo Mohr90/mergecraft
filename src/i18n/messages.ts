@@ -1,5 +1,20 @@
 /** Source-language keys keep German messages next to their call sites. {{n}} slots contain opaque runtime values. */
 export const en = {
+  "Lokale Branches aufräumen": "Clean up local branches",
+  "Lokale Branches aufräumen …": "Clean up local branches …",
+  "Wähle die lokalen Branches, die du löschen möchtest. Branches mit eigenen Commits werden vor dem Löschen nochmals bestätigt.": "Select local branches to delete. Branches with their own commits require confirmation before deletion.",
+  "Alle löschbaren Branches auswählen": "Select all eligible branches",
+  "In einem Worktree geöffnet": "Open in a worktree",
+  "Eigene Commits": "Own commits",
+  "Im aktuellen Stand enthalten": "Included in the current commit",
+  "Auswahl löschen …": "Delete selection …",
+  "{{0}} Branches ausgewählt": "{{0}} branches selected",
+  "Die markierten Branches enthalten eigene Commits. Beim Löschen können diese Commits unerreichbar werden.": "The marked branches contain their own commits. Deleting them may make these commits unreachable.",
+  "{{0}} lokale Branches löschen?": "Delete {{0}} local branches?",
+  "Ausgewählte Branches löschen": "Delete selected branches",
+  "Repository oder aktueller Commit wurde geändert. Aufräumen gestoppt.": "Repository or current commit changed. Cleanup stopped.",
+  "{{0}} lokale Branches gelöscht": "{{0}} local branches deleted",
+
   "Lokale Änderungen beim Branchwechsel": "Local changes when switching branches",
   "{{0}} Dateien haben lokale Änderungen. Wähle, wie du zu {{1}} wechseln möchtest.": "{{0}} files have local changes. Choose how to switch to {{1}}.",
   "Änderungen verwerfen …": "Discard changes …",

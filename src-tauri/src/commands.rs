@@ -767,6 +767,7 @@ pub fn delete_branch(
     force: Option<bool>,
     remote: Option<bool>,
     expected: Option<String>,
+    expected_head: Option<String>,
 ) -> Result<CommandResult, String> {
     let g = git_of(&state)?;
     if remote.unwrap_or(false) {
@@ -775,6 +776,11 @@ pub fn delete_branch(
             .map(|(a, b)| (a.to_string(), b.to_string()))
             .ok_or_else(|| "Remote-Branch als <remote>/<branch> angeben".to_string())?;
         return Ok(utf8(g.raw(["push", &remote_name, "--delete", &branch])));
+    }
+    if let Some(head) = expected_head {
+        if g.snapshot()?.head != head {
+            return Err("Repository oder aktueller Commit wurde geändert. Aufräumen gestoppt.".into());
+        }
     }
     g.delete_local_branch(&name, force.unwrap_or(false), expected.as_deref())
 }

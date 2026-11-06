@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1 — 2026-11-06
+
+- Clean up selected local branches together, with a select-all preview and explicit confirmation for branches with their own commits.
+- Protect the current branch and linked worktrees, validate branch refs before deletion and report partial failures.
+- Show checkout, compare, merge, branch creation and deletion directly as consistent icons with localized tooltips and accessible names.
+
+
 ## 1.0.0 — 2026-11-06
 
 - Delete local branches directly from the branch list, with explicit confirmation for commits absent from the current branch.

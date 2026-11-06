@@ -288,8 +288,8 @@ export const api = {
     }),
   createBranch: (name: string, start: string | null, checkout = true) =>
     call<CommandResult>("create_branch", { name, start, checkout }),
-  deleteBranch: (name: string, force = false, remote = false, expected?: string) =>
-    call<CommandResult>("delete_branch", { name, force, remote, expected }),
+  deleteBranch: (name: string, force = false, remote = false, expected?: string, expectedHead?: string) =>
+    call<CommandResult>("delete_branch", { name, force, remote, expected, expected_head: expectedHead }),
   renameBranch: (name: string, newName: string) =>
     call<CommandResult>("rename_branch", { name, new_name: newName }),
   mergeBranch: (name: string, noFf = true, squash = false, message: string | null = null) =>
