@@ -76,6 +76,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     await page.waitForFunction(()=>document.querySelector('.branch-trigger .name').textContent==='feature/from-release');
     assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.cmd==='create_branch').at(-1).args.start),'refs/tags/v2.4.0');
     await page.locator('.branch-row[data-name="main"] [data-b-act="checkout"]').click();
+    await page.getByRole("button",{name:"Änderungen mitnehmen",exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('.branch-trigger .name').textContent==='main');
     for(const width of [1440,768,320]){
       await page.setViewportSize({width,height:900});await page.getByRole('button',{name:'Tags',exact:true}).click();
@@ -131,6 +132,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
     await search.fill('merge-dialog');await page.waitForFunction(()=>document.querySelectorAll('.branch-row').length===1);
     await page.locator('[data-b-act="checkout"]').click();
+    await page.getByRole("button",{name:"Änderungen mitnehmen",exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('.branch-trigger .name').textContent==='feature/merge-dialog');
     assert.equal(await search.inputValue(),'merge-dialog','checkout reset search');
     await search.fill('');
@@ -264,10 +266,12 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     await openRemote();await page.getByRole('button',{name:'Abbrechen',exact:true}).click();
     assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.cmd==='checkout_branch').length),checkoutCount,'cancel switched branch');
     await openRemote();await page.getByRole('button',{name:'Lokalen Branch öffnen'}).click();
+    await page.getByRole('button',{name:'Änderungen mitnehmen',exact:true}).click();
     await page.waitForFunction(n=>window.testCalls.filter(c=>c.cmd==='checkout_branch').length===n+1,checkoutCount);
     await page.waitForFunction(()=>!document.querySelector('.shell.busy'));
     assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.cmd==='checkout_branch').at(-1).args.track),false);
     await openRemote();await page.getByRole('button',{name:'Mit Remote aktualisieren'}).click();
+    await page.getByRole('button',{name:'Änderungen mitnehmen',exact:true}).click();
     await page.waitForFunction(n=>window.testCalls.filter(c=>c.cmd==='checkout_branch').length===n+2,checkoutCount);
     await page.waitForFunction(()=>!document.querySelector('.shell.busy'));
     assert.deepEqual(await page.evaluate(()=>{const a=window.testCalls.filter(c=>c.cmd==='checkout_branch').at(-1).args;return [a.force,a.update_from_remote,a.expected_remote];}),[false,true,'bbbbbbbb']);

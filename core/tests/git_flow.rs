@@ -722,3 +722,56 @@ fn remote_checkout_update_preserves_local_work_and_never_discards_commits() {
         .checkout_remote_update("-bad", "feature", &base, &remote)
         .is_err());
 }
+
+#[test]
+fn local_branch_deletion_checks_commits_current_branch_worktree_and_stale_state() {
+    let dir = tmp_repo("local-branch-deletion");
+    let g = setup(&dir);
+    std::fs::write(dir.join("file"), "base\n").unwrap();
+    g.run(["add", "."]).unwrap();
+    g.run(["commit", "-qm", "base"]).unwrap();
+    let base = g.snapshot().unwrap().head;
+    g.run(["branch", "merged"]).unwrap();
+    assert!(g.delete_local_branch("merged", false, Some(&base)).unwrap().ok);
+    assert!(g.delete_local_branch("main", true, Some(&base)).is_err());
+    g.run(["switch", "-c", "own-work"]).unwrap();
+    std::fs::write(dir.join("file"), "own\n").unwrap();
+    g.run(["commit", "-qam", "own"]).unwrap();
+    let own = g.snapshot().unwrap().head;
+    g.run(["switch", "main"]).unwrap();
+    assert!(!g.delete_local_branch("own-work", false, Some(&own)).unwrap().ok);
+    assert!(g.delete_local_branch("own-work", true, Some(&base)).is_err());
+    let other = dir.with_extension("worktree");
+    g.run(["worktree", "add", other.to_str().unwrap(), "own-work"]).unwrap();
+    assert!(!g.delete_local_branch("own-work", true, Some(&own)).unwrap().ok);
+    g.run(["worktree", "remove", other.to_str().unwrap()]).unwrap();
+    assert!(g.delete_local_branch("own-work", true, Some(&own)).unwrap().ok);
+    assert!(g.delete_local_branch("--all", true, None).is_err());
+    assert_eq!(g.snapshot().unwrap().head, base);
+}
+
+#[test]
+fn discard_selected_changes_then_remote_checkout_preserves_untracked_files() {
+    let dir = tmp_repo("discard-before-checkout");
+    let g = setup(&dir);
+    std::fs::write(dir.join("file"), "base\n").unwrap();
+    g.run(["add", "."]).unwrap();
+    g.run(["commit", "-qm", "base"]).unwrap();
+    let base = g.snapshot().unwrap().head;
+    g.run(["remote", "add", "origin", "/unused"]).unwrap();
+    g.run(["switch", "-c", "source"]).unwrap();
+    std::fs::write(dir.join("file"), "incoming\n").unwrap();
+    g.run(["commit", "-qam", "incoming"]).unwrap();
+    let incoming = g.snapshot().unwrap().head;
+    g.run(["update-ref", "refs/remotes/origin/task", &incoming]).unwrap();
+    g.run(["switch", "main"]).unwrap();
+    std::fs::write(dir.join("file"), "dirty\n").unwrap();
+    std::fs::write(dir.join("notes"), "keep\n").unwrap();
+    assert!(!g.checkout_branch("origin/task", Some("task"), false, true).unwrap().ok);
+    assert_eq!(std::fs::read_to_string(dir.join("file")).unwrap(), "dirty\n");
+    assert!(g.rollback(&["file".into()], &base).unwrap().ok);
+    assert!(g.checkout_branch("origin/task", Some("task"), false, true).unwrap().ok);
+    assert_eq!(std::fs::read_to_string(dir.join("file")).unwrap(), "incoming\n");
+    assert_eq!(std::fs::read_to_string(dir.join("notes")).unwrap(), "keep\n");
+    assert_eq!(g.snapshot().unwrap().head, incoming);
+}

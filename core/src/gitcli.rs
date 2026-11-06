@@ -232,6 +232,29 @@ impl Git {
         Ok(result)
     }
 
+    pub fn delete_local_branch(
+        &self,
+        name: &str,
+        force: bool,
+        expected: Option<&str>,
+    ) -> Result<CommandResult, String> {
+        self.valid_branch(name)?;
+        let snapshot = self.snapshot()?;
+        if snapshot.merging || snapshot.rebasing || snapshot.cherry_picking {
+            return Err("Schließe zuerst den laufenden Git-Vorgang ab.".into());
+        }
+        if snapshot.head_branch.as_deref() == Some(name) {
+            return Err("Wechsle zuerst auf einen anderen Branch.".into());
+        }
+        let oid = self.run(["rev-parse", "--verify", &format!("refs/heads/{name}")])?;
+        if let Some(expected) = expected {
+            if expected.len() < 7 || !oid.trim().starts_with(expected) {
+                return Err("Der Branch-Stand hat sich geändert. Bitte aktualisieren und erneut auswählen.".into());
+            }
+        }
+        Ok(self.run_result(["branch", if force { "-D" } else { "-d" }, "--", name]))
+    }
+
     pub fn create_branch(
         &self,
         name: &str,

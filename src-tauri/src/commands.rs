@@ -766,6 +766,7 @@ pub fn delete_branch(
     name: String,
     force: Option<bool>,
     remote: Option<bool>,
+    expected: Option<String>,
 ) -> Result<CommandResult, String> {
     let g = git_of(&state)?;
     if remote.unwrap_or(false) {
@@ -775,8 +776,7 @@ pub fn delete_branch(
             .ok_or_else(|| "Remote-Branch als <remote>/<branch> angeben".to_string())?;
         return Ok(utf8(g.raw(["push", &remote_name, "--delete", &branch])));
     }
-    let flag = if force.unwrap_or(false) { "-D" } else { "-d" };
-    Ok(utf8(g.raw(["branch", flag, &name])))
+    g.delete_local_branch(&name, force.unwrap_or(false), expected.as_deref())
 }
 
 #[tauri::command(rename_all = "snake_case")]

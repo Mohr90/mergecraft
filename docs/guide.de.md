@@ -82,3 +82,10 @@ Diffs und Merge-Spalten zeigen Syntaxfarben für Java, TypeScript/JavaScript, JS
 Bei **Öffnen** findest du angeheftete und zuletzt verwendete Repositories. Mit dem Stern heftest du ein Projekt an oder löst es wieder. Der Pfad unterscheidet gleichnamige Ordner. Favoriten bleiben nach einem Neustart erhalten; Ansicht, Filter und Commit-Entwurf werden beim Zurückwechseln innerhalb derselben App-Sitzung wiederhergestellt. Bei ungespeicherten Merge-Entscheidungen greift weiterhin die Rückfrage vor dem Verlassen. Git-Änderungen werden beim Projektwechsel nicht verworfen.
 
 Die weiteren vier Verbesserungen sind für v1.0.0 vorgemerkt: [Roadmap](roadmap.md).
+
+
+## Lokale Branches löschen und wechseln
+
+Neben jedem lokalen Branch erscheint ein Papierkorb. Für den aktuellen Branch wechselst du zuerst zu einem anderen Branch. Vor dem Löschen siehst du eine Bestätigung. Enthält der Branch Commits, die im aktuellen Branch fehlen, weist Mergecraft darauf hin und verlangt die ausdrückliche Bestätigung. Git schützt Branches, die in einem anderen Worktree ausgecheckt sind.
+
+Beim Branchwechsel mit lokalen Dateiänderungen wählst du **Änderungen mitnehmen** oder **Änderungen verwerfen …**. Beim Verwerfen prüfst du die Dateiliste und setzt die ausgewählten Dateien einschließlich Staging auf den letzten Commit zurück. Danach versucht Mergecraft den Branchwechsel. Bei einem Fehler bleibt die Fehlermeldung sichtbar. Unversionierte Dateien bleiben erhalten; blockieren sie den Wechsel, musst du sie vorher verschieben oder bewusst entfernen.

@@ -1818,7 +1818,7 @@ dependencies = [
 
 [[package]]
 name = "mergecraft"
-version = "0.5.0"
+version = "1.0.0"
 dependencies = [
  "gtk",
  "mergecraft-core",
@@ -1832,7 +1832,7 @@ dependencies = [
 
 [[package]]
 name = "mergecraft-core"
-version = "0.5.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "similar",
