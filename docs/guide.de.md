@@ -35,6 +35,10 @@ Bei Konflikten zeigt der Editor **Aktueller Branch · Ergebnis · Eingehender Br
 
 ![Dateiübersicht und Drei-Wege-Editor](screenshots/mergecraft-merge-overview.png)
 
+Die Pfeile direkt beim Quelltext übernehmen die jeweilige Seite. **Gemeinsame Basis ansehen** zeigt den ursprünglichen Text eines Konflikts. Mit **F7** und **Umschalt+F7** springst du zwischen offenen Bereichen.
+
+In der Vorschau von **Auto Resolve** kannst du einzelne Bereiche abwählen. **Vorschläge durchgehen** öffnet die nächste Stelle zur Einzelprüfung. Dazu gehören beispielsweise einfache Java- oder TypeScript-Imports, die beide Branches an derselben Stelle eingefügt haben. Bei unterschiedlichen lokalen Importnamen zeigt Mergecraft beide Deklarationen zur Prüfung an.
+
 **Auto Resolve** unterscheidet eindeutig kombinierbare Textbereiche, prüfpflichtige Vorschläge und manuelle Entscheidungen. Die Vorschau erklärt die Kombination. Änderungen innerhalb derselben Zeile übernimmst du einzeln nach Prüfung. Das Ergebnis muss weiterhin fachlich geprüft werden.
 
 - **Links übernehmen**, **Rechts übernehmen** oder **Bearbeiten** entscheidet einen Bereich. **Links → rechts** hängt beide Fassungen in dieser Reihenfolge aneinander.

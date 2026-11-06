@@ -151,6 +151,17 @@ await test('merge decisions retain keyboard focus and report progress and unsave
   assert(editor.resultText()==='right1\nleft2\n','bulk overwrote prior choice');
   click('[data-act="save"]');await new Promise(r=>setTimeout(r,0));assert(!fixture.querySelector('.edit-state')!.textContent,'saved state remains dirty');
 });
+await test('F7 continues from a resolved block and the ancestor is read-only',async()=>{
+  const editor=new MergeEditor({save:async()=>({ok:true,message:'ok'}),onSaved(){},onError(){},onClose(){}});
+  const rows=[0,1,2].map(i=>({kind:'conflict',base:[i,1],ours:[i,1],theirs:[i,1]}));
+  editor.load(await conflictFixture('a\nb\nc\n','l1\nl2\nl3\n','r1\nr2\nr3\n',rows));editor.mount(fixture);
+  const before=editor.resultText();
+  click('.region[data-region="1"] .merge-base summary');
+  assert(fixture.querySelector('.merge-base[open] pre')?.textContent==='b' && editor.resultText()===before,'base inspection changed result');
+  click('.region[data-region="1"] .col-ours [data-act="take-ours"]');
+  fixture.querySelector('.merge')!.dispatchEvent(new KeyboardEvent('keydown',{key:'F7',bubbles:true}));
+  assert(document.activeElement?.closest<HTMLElement>('.region')?.dataset.region==='2','F7 jumped backwards');
+});
 await test('merge navigation uses reduced motion and avoids a second focus scroll',async()=>{
   const editor=new MergeEditor({save:async()=>({ok:true,message:'ok'}),onSaved(){},onError(){},onClose(){}});
   editor.load(await conflictFixture('base\n','left\n','right\n',oneConflict));editor.mount(fixture);
@@ -376,6 +387,14 @@ await test('lightweight tags have no type badge',async()=>{
 await test('auto analysis separates reviewed same-line suggestions from unambiguous proposals',()=>{
  assert(analyzeConflict(['x=1; y=2;'],['x=10; y=2;'],['x=1; y=20;'])?.kind==='review','same-line edits claimed safe');
  assert(analyzeConflict(['a','middle','b'],['A','middle','b'],['a','middle','B'])?.kind==='safe','separate edits unavailable');
+ assert(analyzeConflict(['a','b'], ['A','b'], ['a','B'])?.kind==='safe','adjacent replacements still require review');
+ assert(analyzeConflict(['a','b'], ['A','b'], ['a','extra','b'])===null,'ambiguous shared boundary accepted');
+ assert(analyzeConflict(['a','a'], ['A','a'], ['a','B'])===null,'ambiguous repeated lines accepted');
+ const a = ["import one.Alpha;"], b = ["import two.Beta;"];
+ assert(analyzeConflict([],a,b,'Example.java')?.kind==='review','distinct Java imports missing review');
+ assert(analyzeConflict([],a,["import two.Alpha;"],'Example.java')===null,'colliding import accepted');
+ assert(analyzeConflict([],a,b,'file.txt')===null,'unsupported language guessed');
+ assert(analyzeConflict([],["import './setup';"],["import './config';"],'file.ts')===null,'side-effect imports guessed');
  assert(analyzeConflict(['x'],['y'],['z'])===null,'overlap guessed');
  assert(analyzeConflict([],['x'],['y'])===null,'competing insertions guessed');
 });
@@ -397,7 +416,12 @@ await test('Auto Resolve previews a safe batch, preserves manual choices and und
  editor.load(await conflictFixture('a\nmiddle\nb\nc\nmiddle2\nd\nlast\n','A\nmiddle\nb\nC\nmiddle2\nd\nours\n','a\nmiddle\nB\nc\nmiddle2\nD\ntheirs\n',regions));editor.mount(fixture);
  (fixture.querySelectorAll<HTMLElement>('[data-act="take-ours"]')[2]).click();const before=editor.resultText();
  click('[data-act="auto-resolve"]');assert(editor.resultText()===before,'preview changed content');
- (document.querySelector('dialog [data-i="1"]') as HTMLElement).click();await new Promise(resolve=>setTimeout(resolve,0));
+ const boxes = document.querySelectorAll<HTMLInputElement>('dialog .auto-checklist input');
+ assert(boxes.length===2,'manual decision entered safe batch');boxes[1].click();
+ (document.querySelector('dialog [data-i="1"]') as HTMLElement).click();
+ assert(editor.resultText().includes('<<<<<<<') && editor.resultText().startsWith('A\nmiddle\nB\n'), 'selection not respected');
+ click('[data-act="undo"]');assert(editor.resultText()===before,'selective batch undo failed');
+ click('[data-act="auto-resolve"]');(document.querySelector('dialog [data-i="1"]') as HTMLElement).click();
  assert(!editor.resultText().includes('<<<<<<<')&&editor.resultText().endsWith('ours\n'),'batch lost manual choice');
  click('[data-act="undo"]');assert(editor.resultText()===before,'batch required multiple undo operations');assert(writes===0,'preview wrote files');
 });
