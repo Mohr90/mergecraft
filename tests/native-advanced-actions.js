@@ -9,7 +9,17 @@
  const content=async(path)=>{const d=await invoke('file_diff',{rev_a:'HEAD',rev_b:'WORK',path,label_a:null,label_b:null});return d.b_text;};
  try {
   await until(()=>document.querySelector('.branches-panel'));
-  const initial=await invoke('status');assert(initial.conflicts.length===9,'fixture must contain 9 Git conflicts');
+  const initial=await invoke('status');assert(initial.conflicts.length===10,'fixture must contain 10 Git conflicts');
+  await open('imports.ts');
+  const pending = app.mergeEditor.resultText();
+  click('[data-act="review-next"]');
+  assert(document.querySelector('details.auto-suggestion[open]'), 'import preview missing');
+  assert(app.mergeEditor.resultText() === pending, 'review mutated the draft');
+  assert(document.querySelector('[data-act="auto-resolve"]').disabled, 'imports entered the safe batch');
+  click('[data-act="auto-region"]');
+  await saved('imports.ts');
+  assert(await content('imports.ts') === "import { Local } from './local';\nimport { Remote } from './remote';\nexport {};\n", 'import order or content changed');
+  notes.push('PASS review concurrent TypeScript imports and stage both declarations');
   await open('auto.txt');assert(document.querySelector('[data-act="auto-resolve"]').disabled,'same-line proposal treated as safe');
   click('[data-act="auto-region"]');assert(app.mergeEditor.resultText()==='let x = 10; let y = 20;\n','auto preview wrong');
   assert((await invoke('status')).conflicts.some(e=>e.path==='auto.txt'),'auto resolved on disk before review');
@@ -39,7 +49,7 @@
   assert(await content('clean.txt')==='local\nmiddle\nincoming\n','nonconflicting edits lost');assert(await content('notes.txt')==='leave me alone\n','unrelated worktree changed');
   notes.push('PASS modify/delete choice, binary bytes, automatic nonconflicting edits and unrelated worktree preserved');
   assert((await invoke('status')).conflicts.length===0,'conflicts remain');await invoke('merge_continue');assert(!(await invoke('snapshot')).merging,'merge not finalized');
-  assert(await content('personal.txt')==='my unrelated local work\n','unrelated tracked work lost');notes.push('PASS merge completed with all 9 original conflicts resolved');
+  assert(await content('personal.txt')==='my unrelated local work\n','unrelated tracked work lost');notes.push('PASS merge completed with all 10 original conflicts resolved');
  }catch(e){notes.push('FAIL '+(e.stack||e));}
  await invoke('selftest_report',{text:notes.join('\n')});
 })();

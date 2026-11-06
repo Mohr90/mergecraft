@@ -1,3 +1,5 @@
+import { combineImports } from "./import-proposal";
+
 // Explicit text proposals, never semantic or automatic writes.
 function same(a:string[],b:string[]) {return a.length===b.length&&a.every((v,i)=>v===b[i]);}
 type Edit={start:number;end:number;text:string[]};
@@ -24,13 +26,19 @@ function combine(base:string[],left:string[],right:string[],characters=false):st
   let duplicate=false;
   for(const own of a){
    if(own.start===change.start&&own.end===change.end&&same(own.text,change.text)){duplicate=true;continue;}
-   // Shared boundaries including insertion points remain manual.
-   if(!(own.end<change.start||change.end<own.start))return null;
+   // Adjacent replacements consume disjoint half-open line ranges. An
+   // insertion at a shared boundary still needs an ordering decision.
+   const adjacentReplacements = !characters && own.start < own.end && change.start < change.end
+     && (own.end === change.start || change.end === own.start);
+   if (!(own.end < change.start || change.end < own.start || adjacentReplacements)) return null;
   }
   if(!duplicate)all.push(change);
  }
  if(!characters){
+  const originals = new Set(base);
   for(const change of all){
+   // Copied or moved source lines make positional alignment ambiguous.
+   if (change.text.some(line => originals.has(line))) return null;
    const context=change.end>change.start ? base.slice(change.start,change.end) : base.slice(Math.max(0,change.start-2),Math.min(base.length,change.end+2));
    let matches=0;
    for(let i=0;i+context.length<=base.length;i++)if(context.every((line,k)=>base[i+k]===line))matches++;
@@ -64,13 +72,22 @@ export function simpleConflictResolution(base:string[],left:string[],right:strin
  return combine(base,left,right);
 }
 
-export interface Proposal { lines:string[]; kind:'safe'|'review'; reason:'same'|'one-side'|'separate'|'characters'; }
-export function analyzeConflict(base:string[],left:string[],right:string[]):Proposal|null {
+export interface Proposal { lines:string[]; kind:'safe'|'review'; reason:'same'|'one-side'|'separate'|'characters'|'imports'; }
+export function analyzeConflict(base:string[],left:string[],right:string[], path = ""):Proposal|null {
  if(same(left,right))return {lines:[...left],kind:'safe',reason:'same'};
  if(same(base,left)||same(base,right))return {lines:same(base,left)?[...right]:[...left],kind:'safe',reason:'one-side'};
+ if (!base.length && left.length && right.length) {
+  const lines = combineImports(path, left, right);
+  return lines ? {lines, kind:'review', reason:'imports'} : null;
+ }
  if(!base.length||!left.length||!right.length)return null;
  const safe=combine(base,left,right);
  if(safe!==null)return {lines:safe,kind:'safe',reason:'separate'};
+ if (base.length !== left.length || base.length !== right.length) return null;
+ const originals = new Set(base);
+ if (originals.size !== base.length || !base.some((line,i) =>
+   left[i] !== line && right[i] !== line && left[i] !== right[i])) return null;
+ if ([left,right].some(side => side.some((line,i) => line !== base[i] && originals.has(line)))) return null;
  const proposal=simpleConflictResolution(base,left,right);
  return proposal===null ? null : {lines:proposal,kind:'review',reason:'characters'};
 }
