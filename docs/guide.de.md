@@ -35,6 +35,10 @@ Bei Konflikten zeigt der Editor **Aktueller Branch · Ergebnis · Eingehender Br
 
 ![Dateiübersicht und Drei-Wege-Editor](screenshots/mergecraft-merge-overview.png)
 
+Die Pfeile direkt beim Quelltext übernehmen die jeweilige Seite. **Gemeinsame Basis ansehen** zeigt den ursprünglichen Text eines Konflikts. Mit **F7** und **Umschalt+F7** springst du zwischen offenen Bereichen.
+
+In der Vorschau von **Auto Resolve** kannst du einzelne Bereiche abwählen. **Vorschläge durchgehen** öffnet die nächste Stelle zur Einzelprüfung. Dazu gehören beispielsweise einfache Java- oder TypeScript-Imports, die beide Branches an derselben Stelle eingefügt haben. Bei unterschiedlichen lokalen Importnamen zeigt Mergecraft beide Deklarationen zur Prüfung an.
+
 **Auto Resolve** unterscheidet eindeutig kombinierbare Textbereiche, prüfpflichtige Vorschläge und manuelle Entscheidungen. Die Vorschau erklärt die Kombination. Änderungen innerhalb derselben Zeile übernimmst du einzeln nach Prüfung. Das Ergebnis muss weiterhin fachlich geprüft werden.
 
 - **Links übernehmen**, **Rechts übernehmen** oder **Bearbeiten** entscheidet einen Bereich. **Links → rechts** hängt beide Fassungen in dieser Reihenfolge aneinander.
@@ -69,3 +73,12 @@ mergecraft --diag /pfad/zum/repo src/main.rs
 ```
 
 Die Diagnose kann Dateinamen, Commit-Texte und Remote-Adressen enthalten. Prüfe die Ausgabe, bevor du sie in einem öffentlichen Issue teilst.
+
+
+## Syntaxfarben und Projektfavoriten (v0.5.0)
+
+Diffs und Merge-Spalten zeigen Syntaxfarben für Java, TypeScript/JavaScript, JSON, Rust, CSS, HTML/XML, Python und Shell. Die Farben beschreiben Textsyntax; sie prüfen keine fachliche Korrektheit. Zeilen- und Wortmarkierungen von Git bleiben sichtbar. Unbekannte Dateitypen und Inhalte über 200.000 Zeichen oder 6.000 Zeilen erscheinen als Klartext.
+
+Bei **Öffnen** findest du angeheftete und zuletzt verwendete Repositories. Mit dem Stern heftest du ein Projekt an oder löst es wieder. Der Pfad unterscheidet gleichnamige Ordner. Favoriten bleiben nach einem Neustart erhalten; Ansicht, Filter und Commit-Entwurf werden beim Zurückwechseln innerhalb derselben App-Sitzung wiederhergestellt. Bei ungespeicherten Merge-Entscheidungen greift weiterhin die Rückfrage vor dem Verlassen. Git-Änderungen werden beim Projektwechsel nicht verworfen.
+
+Die weiteren vier Verbesserungen sind für v1.0.0 vorgemerkt: [Roadmap](roadmap.md).

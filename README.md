@@ -36,6 +36,24 @@
 
 The interface supports **German and English**. Switch languages using the labeled flag buttons beside the appearance controls; your choice is saved locally. Without a saved preference, Mergecraft uses a supported system language and otherwise falls back to English. Light/dark appearance is a separate preference. Mergecraft uses the real Git CLI, so it works with GitHub, GitLab and other Git remotes. It does not require a hosting-service API token and does not provide a built-in merge-request or pipeline dashboard.
 
+## Read code and switch projects faster
+
+Syntax colors in diffs and merge panes make keywords, strings, comments, numbers and recognizable function/type names easier to scan. Java, TypeScript/JavaScript, JSON, Rust, CSS, HTML/XML, Python and shell grammars are bundled locally. Git line/word highlights remain visible; unknown files and inputs over 200,000 characters or 6,000 lines use plain text. This is lexical highlighting, not semantic code analysis.
+
+![Java diff with syntax colors and Git word highlights](docs/screenshots/mergecraft-v050-syntax-java.png)
+
+**Open** now includes pinned and recent repositories. Pin a project to keep it at the top; full paths distinguish matching names. Project pins persist locally. During an app session, returning to a repository restores its workspace, branch/tag filters and commit draft. Unsaved merge decisions still require confirmation before leaving. Switching projects does not discard Git changes.
+
+<details>
+<summary>See repository shortcuts and editable merge syntax colors</summary>
+
+![Pinned and recent repositories beside Open](docs/screenshots/mergecraft-v050-projects.png)
+![Merge source panes and editable result with syntax colors](docs/screenshots/mergecraft-v050-syntax-merge.png)
+
+</details>
+
+See the [versioned roadmap](docs/roadmap.md) for v0.5.0 and the planned v1.0.0 follow-ups.
+
 ## German or English
 
 ![English workspace with German and English language controls beside the appearance switch](docs/screenshots/mergecraft-english-branches.png)
@@ -122,7 +140,7 @@ npm ci
 npm run dev:web
 ```
 
-Open the local URL shown by Vite. Browser mode uses synthetic demo data and does not operate on a real repository. Screenshots show the v0.4.0 interface using synthetic demo data, including a complete conflict-resolution tour. They contain no private repository data. The source version on `main` may be newer than the latest downloadable release.
+Open the local URL shown by Vite. Browser mode uses synthetic demo data and does not operate on a real repository. Screenshots use synthetic demo data: the v0.5.0 syntax/project features and the v0.4.0 conflict-resolution tour. They contain no private repository data. The source version on `main` may be newer than the latest downloadable release.
 
 For the native application:
 

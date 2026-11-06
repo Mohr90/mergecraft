@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 — 2026-11-05
+
+- Read source changes with syntax colors for Java, TypeScript/JavaScript, JSON, Rust, CSS, HTML/XML, Python and shell files in diffs and the merge workspace.
+- Keep Git word highlights alongside syntax colors; unknown and large inputs remain plain text.
+- Pin repositories beside Open, distinguish projects by path and switch directly from recent projects.
+- Return to each repository's workspace, filters and commit draft during the current app session. Existing unsaved-merge confirmation remains in effect.
+
 ## 0.4.0 — 2026-11-04
 
 - Merge workspace with file navigation, retained drafts and undo history, adjustable result width and branch direction.

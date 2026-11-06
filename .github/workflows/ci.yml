@@ -60,6 +60,7 @@ jobs:
           python3 tests/native-i18n.py target/release/mergecraft
           python3 tests/native-close.py target/release/mergecraft
           python3 tests/native-merge.py target/release/mergecraft
+          python3 tests/native-projects.py target/release/mergecraft
       - uses: actions/upload-artifact@v4
         with:
           name: mergecraft-linux-deb

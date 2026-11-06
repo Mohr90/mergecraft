@@ -4,6 +4,7 @@ import { t, h, m, localizeText } from "./i18n";
 
 import type { FileDiff, Highlights } from "./api";
 import { el, esc, icon } from "./ui";
+import { SyntaxDocument } from "./syntax";
 import { baseName, dirName } from "./merge";
 
 export type DiffMode = "split" | "unified";
@@ -42,12 +43,17 @@ export class DiffView {
   mode: DiffMode = "split";
   private diff!: FileDiff;
   private builtinLabels=false;
+  private syntaxA!:SyntaxDocument;
+  private syntaxB!:SyntaxDocument;
+  private renderA:string[]=[];
   private root: HTMLElement | null = null;
 
   constructor(private onClose: () => void) {}
 
   set(diff: FileDiff, mode: DiffMode = "split", builtinLabels=false) {
     this.diff = diff;
+    this.syntaxA=new SyntaxDocument(diff.path,diff.a_text);
+    this.syntaxB=new SyntaxDocument(diff.path,diff.b_text);
     this.builtinLabels=builtinLabels;
     this.mode = mode;
     if (this.root) this.render();
@@ -71,6 +77,7 @@ export class DiffView {
     if (!target) return;
     const d = this.diff;
     const a = splitLines(d.a_text);
+    this.renderA=a;
     const b = splitLines(d.b_text);
     const segs = segments(d, a, b);
     const added = d.blocks.reduce((n, x) => n + x.b_len, 0);
@@ -174,11 +181,8 @@ export class DiffView {
     for (let i = s; i < e; i++) {
       const row = el("div", "line");
       const spans = highlights[String(i)];
-      const body = spans
-        ? spans
-            .map((sp) => (sp.changed ? `<span class="w">${esc(sp.text)}</span>` : esc(sp.text)))
-            .join("")
-        : esc(lines[i] ?? "");
+      const syntax=lines===this.renderA?this.syntaxA:this.syntaxB;
+      const body=syntax.line(i,lines[i]??"",spans);
       const mark = withMark ? (cls === "del" ? "−" : "+") : "";
       row.innerHTML = `<span class="ln">${i + 1}</span><span class="mark">${esc(mark)}</span><span class="txt">${body}</span>`;
       col.appendChild(row);
