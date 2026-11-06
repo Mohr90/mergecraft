@@ -21,6 +21,7 @@ import { openBranchMenu } from "./branchmenu";
 import { DiffView } from "./diff";
 import { baseName, dirName, MergeEditor } from "./merge";
 import { renderBranches, renderChanges, renderConsole, renderHistory, type PanelCtx, type BranchViewState } from "./panels";
+import { cleanupInventory, chooseBranchCleanup } from "./branch-cleanup";
 import { chooseRollback } from "./rollback";
 import { renderTags, type TagViewState } from "./tags";
 import { askText, confirmDialog, modal, esc, icon, toast, relocalizeToasts } from "./ui";
@@ -1056,6 +1057,38 @@ class App implements PanelCtx {
     );
     if (!ok) return;
     await this.runMerge(`Merge ${b.name}`, () => api.mergeBranch(b.name, this.noFF));
+  }
+
+  async cleanupBranches() {
+    if (this.busy || this.gitOperationRunning() || !(await this.leaveMerge())) return;
+    const root = this.snap?.root, head = this.snap?.head;
+    if (!root || !head) return;
+    await this.run(t("Lokale Branches aufräumen"), async () => {
+      const rows = await cleanupInventory(head);
+      const selected = await chooseBranchCleanup(rows);
+      const cancelled = {ok:true, code:0, stdout:"", stderr:""};
+      if (!selected?.length) return cancelled;
+      const own = selected.filter(row => row.ownCommits);
+      const detail = selected.map(row => row.branch.name + (row.ownCommits ? " · " + t("Eigene Commits") : "")).join("\n")
+        + (own.length ? "\n\n" + t("Die markierten Branches enthalten eigene Commits. Beim Löschen können diese Commits unerreichbar werden.") : "");
+      if (!await confirmDialog(m`${selected.length} lokale Branches löschen?`, detail, t("Ausgewählte Branches löschen"))) return cancelled;
+      const deleted:string[] = [], failures:string[] = [];
+      for (const row of selected) {
+        const snapshot = await api.snapshot();
+        if (snapshot.root !== root || snapshot.head !== head) {
+          failures.push(t("Repository oder aktueller Commit wurde geändert. Aufräumen gestoppt."));
+          break;
+        }
+        try {
+          const result = await api.deleteBranch(row.branch.name, row.ownCommits, false, row.branch.short_hash, head);
+          if (result.ok) deleted.push(row.branch.name);
+          else failures.push(row.branch.name + ": " + (result.stderr || result.stdout));
+        } catch (error) { failures.push(row.branch.name + ": " + String(error)); }
+      }
+      const summary = m`${deleted.length} lokale Branches gelöscht`;
+      if (!failures.length) toast(summary);
+      return {ok:!failures.length, code:failures.length ? 1 : 0, stdout:summary, stderr:failures.length ? summary + "\n" + failures.join("\n") : ""};
+    }, true);
   }
 
   private async deleteBranch(b: BranchInfo) {

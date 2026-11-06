@@ -40,6 +40,7 @@ export interface PanelCtx {
   push?(): void;
   mergeError?:string;
   remove(b: BranchInfo): void;
+  cleanupBranches?(): void;
   newFrom(b: BranchInfo | null): void;
   run(label: string, fn: () => Promise<CommandResult>): void;
   runMerge(label: string, fn: () => Promise<any>): void;
@@ -357,7 +358,8 @@ export function renderBranches(ctx: PanelCtx, state: BranchViewState = {query: "
   wrap.innerHTML = h`
     <div class="branch-toolbar"><header class="page-heading"><div><h1>Branches</h1>
       <p class="muted">Branches durchsuchen, wechseln und vergleichen.</p></div>
-      <button class="btn primary" data-branch-act="create" ${merging ? "disabled" : ""}>${icon("plus", 14)} Neuer Branch</button></header>
+      <div class="row-actions-gap"><button class="btn" data-branch-act="cleanup" ${merging || !all.some(b=>!b.is_remote&&!b.is_current) ? "disabled" : ""}>Lokale Branches aufräumen …</button>
+      <button class="btn primary" data-branch-act="create" ${merging ? "disabled" : ""}>${icon("plus", 14)} Neuer Branch</button></div></header>
     ${merging ? h`<div class="banner warn" role="status">Ein Git-Vorgang läuft. Löse zuerst die Konflikte unter „Änderungen“ und schließe den Vorgang ab.</div>` : ""}
     <div class="branch-tools">
       <label class="branch-search">${icon("search", 16)}<input type="search" aria-label="Branches filtern" placeholder="Name oder letzte Commit-Nachricht …"></label>
@@ -432,6 +434,7 @@ export function renderBranches(ctx: PanelCtx, state: BranchViewState = {query: "
     const target = e.target as HTMLElement;
     const summary=target.closest<HTMLElement>(".branch-more summary");
     if(summary) {e.preventDefault();const menu=summary.closest<HTMLDetailsElement>("details")!;setMenuOpen(menu,!menu.open);return;}
+    if (target.closest('[data-branch-act="cleanup"]')) return ctx.cleanupBranches?.();
     if (target.closest('[data-branch-act="create"]')) return ctx.newFrom(null);
     if (target.closest('[data-branch-act="reset"]')) { search.value = ""; scope.value = "all"; filterChanged(); search.focus(); return; }
     const button = target.closest('[data-b-act]') as HTMLButtonElement | null;
