@@ -1,5 +1,11 @@
 # Mergecraft roadmap
 
+## [v1.3.0 · Outgoing commits and branch history](https://github.com/Mohr90/mergecraft/milestone/6)
+
+- [Refresh local status on focus without fetching from the network](https://github.com/Mohr90/mergecraft/issues/24).
+- Open outgoing commits from the branch indicator and inspect their files and diffs.
+- Browse local and remote branch history without checkout.
+
 ## [v1.2.0 · Auto Resolve across files](https://github.com/Mohr90/mergecraft/milestone/5)
 
 - [Partially resolve mixed conflicts](https://github.com/Mohr90/mergecraft/issues/20).

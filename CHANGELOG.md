@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0 — 2026-11-09
+
+- Refresh local repository status when Mergecraft regains focus, including commits made or pushed in another editor.
+- Open outgoing commits from the branch status and inspect their files and diffs in History.
+- Browse any local or remote branch history without checkout; distinguish branches without a push destination.
+
 ## 1.2.0 — 2026-11-09
 
 - Resolve independent edits inside mixed text conflicts while keeping competing edits open.

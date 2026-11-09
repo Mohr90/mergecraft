@@ -64,7 +64,7 @@ await test('sync status separates unpublished commits from missing or unknown tr
  const branch=(await mockInvoke('branches'))[0];branch.upstream='origin/main';branch.tracking_known=true;
  for(const [ahead,behind,tone,words] of [[0,0,'ok','Synchron'],[2,0,'pending','2 ungepushte'],[0,1,'incoming','Remote-Commit fehlt'],[2,1,'pending','Remote-Commit fehlt']] as const){const value=branchSync({...branch,ahead,behind});assert(value.tone===tone&&value.label.includes(words),'wrong sync state');}
  assert(branchSync({...branch,tracking_known:false}).tone==='unknown','unknown tracking claimed synced');
- assert(branchSync({...branch,upstream:null}).label==='Kein Upstream','untracked branch claimed unpublished');
+ assert(branchSync({...branch,upstream:null}).label==='Kein Push-Ziel','untracked branch claimed unpublished');
 });
 await test('toasts are bounded dismissible escaped and pause while reading',async()=>{
  const host=document.createElement('div');host.className='toasts';document.body.appendChild(host);

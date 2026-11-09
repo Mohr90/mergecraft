@@ -1,5 +1,12 @@
 /** Source-language keys keep German messages next to their call sites. {{n}} slots contain opaque runtime values. */
 export const en = {
+  "Commits ansehen": "View commits",
+  "Ausstehende Commits": "Outgoing commits",
+  "Alle Commits": "All commits",
+  "Branch-Historie": "Branch history",
+  "Diese Commits fehlen dem lokal bekannten Tracking-Branch.": "These commits are absent from the locally known tracking branch.",
+  "Commits dieses Branches ohne Checkout.": "Commits on this branch without checking it out.",
+  "Kein Push-Ziel": "No push destination",
   "Lokale Branches aufräumen": "Clean up local branches",
   "Lokale Branches aufräumen …": "Clean up local branches …",
   "Wähle die lokalen Branches, die du löschen möchtest. Branches mit eigenen Commits werden vor dem Löschen nochmals bestätigt.": "Select local branches to delete. Branches with their own commits require confirmation before deletion.",

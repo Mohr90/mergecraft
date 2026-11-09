@@ -284,6 +284,7 @@ export async function mockInvoke(cmd: string, args?: any): Promise<any> {
     case "status":
       return status();
     case "history":
+    case "branch_log":
     case "file_history":
       return history();
     case "compare_files":

@@ -52,6 +52,36 @@ fn make_conflict(dir: &Path) -> Git {
 }
 
 #[test]
+fn branch_history_shows_external_commits_without_checkout() {
+    let dir = tmp_repo("outgoing-history");
+    let g = setup(&dir);
+    std::fs::write(dir.join("note.txt"), "base\n").unwrap();
+    g.run(["add", "-A"]).unwrap();
+    g.run(["commit", "-qm", "base"]).unwrap();
+    let remote = dir.with_extension("bare");
+    let _ = std::fs::remove_dir_all(&remote);
+    g.run(["clone", "--bare", ".", remote.to_str().unwrap()]).unwrap();
+    g.run(["remote", "add", "origin", remote.to_str().unwrap()]).unwrap();
+    g.run(["push", "-u", "origin", "main"]).unwrap();
+
+    g.run(["checkout", "-q", "-b", "work"]).unwrap();
+    g.run(["push", "-u", "origin", "work"]).unwrap();
+    std::fs::write(dir.join("note.txt"), "from vscode\n").unwrap();
+    g.run(["commit", "-qam", "external editor commit"]).unwrap();
+    let outgoing = g.branch_log("work", true).unwrap();
+    assert_eq!(outgoing.len(), 1);
+    assert_eq!(outgoing[0].subject, "external editor commit");
+    assert_eq!(g.branch_log("work", false).unwrap().len(), 2);
+    assert_eq!(g.branch_log("main", false).unwrap().len(), 1);
+    assert!(g.branch_log("main", true).unwrap().is_empty());
+    assert!(g.branch_log("missing", false).is_err());
+
+    g.run(["checkout", "-q", "-b", "local-only"]).unwrap();
+    assert!(g.branch_log("local-only", true).is_err());
+    assert_eq!(g.branch_log("local-only", false).unwrap().len(), 2);
+}
+
+#[test]
 fn stages_blobs_and_resolution() {
     let dir = tmp_repo("resolve");
     let g = make_conflict(&dir);

@@ -26,7 +26,10 @@ export interface PanelCtx {
   openWorkingDiff(path: string, area?: "staged" | "work" | "untracked"): void;
   previewFile?(path: string, area: "staged" | "work" | "untracked"): void;
   showFileHistory?(path: string): void;
+  showBranchHistory?(branch: BranchInfo, outgoing?: boolean): void;
   historyPath?: string | null;
+  historyBranch?: string | null;
+  historyOutgoing?: boolean;
   favoriteBranches?(): Set<string>;
   toggleFavorite?(name: string): void;
   openCommitDiff(hash: string, path: string): void;
@@ -408,6 +411,7 @@ export function renderBranches(ctx: PanelCtx, state: BranchViewState = {query: "
       case "checkout": return ctx.checkout(branch);
       case "merge": return ctx.merge(branch);
       case "compare": return ctx.compare(branch);
+      case "history": return ctx.showBranchHistory?.(branch, !branch.is_remote && !!branch.upstream && branch.tracking_known && branch.ahead > 0);
       case "newfrom": return ctx.newFrom(branch);
       case "delete": return ctx.remove(branch);
     }
@@ -428,6 +432,7 @@ function branchRow(b: BranchInfo, blocked: boolean, target: string, favorite = f
       <span class="bdate" title="${esc(absTime(b.timestamp))}">${esc(b.short_hash)} · ${esc(relTime(b.timestamp))}</span></div>
       <span class="small muted">${b.upstream ? m`Verfolgt ${esc(b.upstream)}` : b.is_remote ? t("Remote · beim Wechsel lokal verfolgen") : t("Lokal · kein Upstream")}</span></div>
     <div class="actions branch-actions">
+      ${branchAction("history", t("Commits ansehen"), "history", b.name)}
       ${!b.is_current ? branchAction("checkout", t("Wechseln"), "checkout", b.name, disabled) : ""}
       ${!b.is_current ? branchAction("compare", t("Vergleichen"), "compare", b.name) : ""}
       ${!b.is_current && allowMerge ? branchAction("merge", m`In ${target} mergen`, "merge", b.name, disabled) : ""}
@@ -444,12 +449,20 @@ function branchAction(action:string, label:string, glyph:string, branch:string, 
 export function renderHistory(ctx: PanelCtx): HTMLElement {
   const wrap = el("div", "panel-pad");
   const commits = ctx.history();
-  wrap.addEventListener("click", e => { if ((e.target as HTMLElement).closest("[data-all-history]")) ctx.showFileHistory?.(""); });
+  wrap.addEventListener("click", e => {
+    const target = e.target as HTMLElement;
+    if (target.closest("[data-all-history]")) ctx.showFileHistory?.("");
+    if (target.closest("[data-branch-history]")) {
+      const branch = ctx.branches().find(b => b.name === ctx.historyBranch);
+      if (branch) ctx.showBranchHistory?.(branch, !ctx.historyOutgoing && !!branch.upstream && branch.tracking_known && branch.ahead > 0);
+    }
+  });
   const selected = ctx.selectedCommit();
   const files = ctx.commitFiles();
   const sel = commits.find((c) => c.hash === selected);
   wrap.innerHTML = `
     ${ctx.historyPath ? h`<header class="page-heading"><h1>Dateihistorie: ${esc(ctx.historyPath)}</h1><button class="btn" data-all-history>Gesamte Historie</button></header>` : ""}
+    ${ctx.historyBranch ? h`<header class="page-heading"><div><h1>${ctx.historyOutgoing ? t("Ausstehende Commits") : t("Branch-Historie")}: ${esc(ctx.historyBranch)}</h1><p class="muted">${ctx.historyOutgoing ? t("Diese Commits fehlen dem lokal bekannten Tracking-Branch.") : t("Commits dieses Branches ohne Checkout.")}</p></div><div class="row-actions-gap">${ctx.historyOutgoing || (ctx.branches().find(b=>b.name===ctx.historyBranch)?.ahead ?? 0)>0 ? `<button class="btn" data-branch-history>${ctx.historyOutgoing ? t("Alle Commits") : t("Ausstehende Commits")}</button>` : ""}<button class="btn" data-all-history>${t("Gesamte Historie")}</button></div></header>` : ""}
     <div class="hist" style="height:calc(100vh - 120px)">
       <div class="hist-list">
         ${
