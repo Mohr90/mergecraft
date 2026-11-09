@@ -112,6 +112,7 @@ export class MergeEditor {
           for (const [i, node] of this.nodes) {
             if (!this.proposals.has(i)) node.querySelector(".proposal-panel")?.replaceWith(this.proposalPanel(i));
           }
+          this.updateHeader();
         };
         worker.onmessage = event => {
           if (this.worker !== worker) return;
@@ -647,7 +648,8 @@ export class MergeEditor {
     const candidates=this.autoCandidates();
     const safe=candidates.filter(candidate=>this.proposals.get(candidate.index)?.kind==='safe');
     const summary=wrap.querySelector('.auto-summary');
-    if(summary)summary.textContent=`${safe.length} ${t('kombinierbar')} · ${candidates.length-safe.length} ${t('Vorschlag prüfen')} · ${open.length-candidates.length} ${t('manuell entscheiden')}`;
+    const pending=this.worker ? open.filter(index=>!this.proposals.has(index)).length : 0;
+    if(summary)summary.textContent=`${safe.length} ${t('kombinierbar')} · ${candidates.length-safe.length} ${t('Vorschlag prüfen')} · ${open.length-candidates.length-pending} ${t('manuell entscheiden')}` + (pending ? ` · ${pending} ${t('in Analyse')}` : '');
     const reviewNext = wrap.querySelector<HTMLButtonElement>('[data-act="review-next"]');
     if (reviewNext) {
       reviewNext.hidden = safe.length === candidates.length || this.rawMode;

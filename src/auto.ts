@@ -1,10 +1,20 @@
-import { combineImports } from "./import-proposal";
+import { combineImports, extendNamedImport } from "./import-proposal";
 
 // Explicit text proposals, never semantic or automatic writes.
 function same(a:string[],b:string[]) {return a.length===b.length&&a.every((v,i)=>v===b[i]);}
 type Edit={start:number;end:number;text:string[]};
 function changes(base:string[],value:string[]):Edit[]|null {
- const n=base.length,m=value.length;if((n+1)*(m+1)>250000)return null;
+ const n=base.length,m=value.length;
+ if ((n+1)*(m+1)>250000) {
+  // A large region can contain just a small edit. Bound the diff matrix by
+  // the changed window; combine still validates ambiguity against the full base.
+  let start=0, end=0;
+  while(start<n && start<m && base[start]===value[start])start++;
+  while(end<n-start && end<m-start && base[n-end-1]===value[m-end-1])end++;
+  if(!start && !end)return null;
+  const inner=changes(base.slice(start,n-end),value.slice(start,m-end));
+  return inner?.map(edit=>({...edit,start:edit.start+start,end:edit.end+start})) ?? null;
+ }
  const width=m+1,dp=new Uint32Array((n+1)*width);
  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)dp[i*width+j]=base[i]===value[j]?1+dp[(i+1)*width+j+1]:Math.max(dp[(i+1)*width+j],dp[i*width+j+1]);
  const out:Edit[]=[];let i=0,j=0;
@@ -81,6 +91,13 @@ export function analyzeConflict(base:string[],left:string[],right:string[], path
   return lines ? {lines, kind:'review', reason:'imports'} : null;
  }
  if(!base.length||!left.length||!right.length)return null;
+ // Import declarations with conflicting bindings or module changes should
+ // never fall through to a character-level guess.
+ if (/\.[cm]?[jt]sx?$/.test(path) && [base,left,right].every(side => side.length === 1) &&
+     [base,left,right].some(side => /^\s*import\b/.test(side[0]))) {
+  const line = extendNamedImport(base[0],left[0],right[0]);
+  return line === null ? null : {lines:[line],kind:'review',reason:'imports'};
+ }
  const safe=combine(base,left,right);
  if(safe!==null)return {lines:safe,kind:'safe',reason:'separate'};
  if (base.length !== left.length || base.length !== right.length) return null;

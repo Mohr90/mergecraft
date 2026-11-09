@@ -428,10 +428,10 @@ function branchRow(b: BranchInfo, blocked: boolean, target: string, favorite = f
       <span class="bdate" title="${esc(absTime(b.timestamp))}">${esc(b.short_hash)} · ${esc(relTime(b.timestamp))}</span></div>
       <span class="small muted">${b.upstream ? m`Verfolgt ${esc(b.upstream)}` : b.is_remote ? t("Remote · beim Wechsel lokal verfolgen") : t("Lokal · kein Upstream")}</span></div>
     <div class="actions branch-actions">
-      ${!b.is_current ? branchAction("checkout", t("Wechseln"), "right", b.name, disabled) : ""}
+      ${!b.is_current ? branchAction("checkout", t("Wechseln"), "checkout", b.name, disabled) : ""}
       ${!b.is_current ? branchAction("compare", t("Vergleichen"), "compare", b.name) : ""}
       ${!b.is_current && allowMerge ? branchAction("merge", m`In ${target} mergen`, "merge", b.name, disabled) : ""}
-      ${branchAction("newfrom", t("Neuer Branch von hier"), "plus", b.name, disabled)}
+      ${branchAction("newfrom", t("Neuer Branch von hier"), "branchPlus", b.name, disabled)}
       ${!b.is_current ? branchAction("delete", t(b.is_remote ? "Remote-Branch löschen" : "Lokalen Branch löschen"), "trash", b.name, disabled, true) : ""}
     </div></div>`;
 }

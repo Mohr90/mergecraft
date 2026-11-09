@@ -68,6 +68,7 @@ export const en = {
   "Links → rechts": "Left → right",
 
   "kombinierbar": "can be combined",
+  "in Analyse": "being analyzed",
   "manuell entscheiden": "need a manual decision",
   "Weitere Aktionen": "More actions",
   "Eingehender Branch": "Incoming branch",

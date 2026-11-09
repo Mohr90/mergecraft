@@ -1,15 +1,10 @@
 # Mergecraft roadmap
 
-Mergecraft focuses on branches, tags, history, diffs and conflict resolution. The active roadmap contains three improvements for v1.5.0. Acceptance criteria live in the linked issues. A release date will follow once the work is tested.
+## [v1.1.0 · Conflict resolution and branch actions](https://github.com/Mohr90/mergecraft/milestone/4)
 
-## v1.5.0
+1. Preview independent additions to the same named JavaScript or TypeScript import. Show the exact result before applying it. Divergent modules, removed names and ambiguous bindings require a manual decision.
+   For large conflict regions, analyze the changed portion within the existing memory budget. Show pending analysis separately from manual decisions.
+2. Make checkout, compare and create-from actions distinguishable at a glance. Keep localized tooltips, accessible names and keyboard operation.
+3. Verify the resolver against competing edits and exercise branch and conflict workflows in the browser before release.
 
-[Milestone](https://github.com/Mohr90/mergecraft/milestone/2)
-
-- [#7 Clearer branch and tag discovery](https://github.com/Mohr90/mergecraft/issues/7). Consistent search and filters, visible local/remote tracking and useful tag details.
-- [#8 Preview incoming changes before merging](https://github.com/Mohr90/mergecraft/issues/8). Confirm source and target branches, inspect incoming commits and files, then start the merge from the comparison.
-- [#9 Review conflict results with contextual file history](https://github.com/Mohr90/mergecraft/issues/9). Filter results for a final review and inspect the existing file history from a diff or conflict. Returning restores the same editor context, draft and undo history.
-
-Request #10 is consolidated into #9. Source-side actions, ancestor inspection, selective Auto Resolve and pending proposal navigation already exist and form the starting point for further review improvements.
-
-Completed work is recorded in the [changelog](../CHANGELOG.md) and merged pull requests. Earlier planning milestones have been retired.
+Completed releases are recorded in the [changelog](../CHANGELOG.md).

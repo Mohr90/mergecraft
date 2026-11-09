@@ -391,6 +391,15 @@ await test('auto analysis separates reviewed same-line suggestions from unambigu
  assert(analyzeConflict(['a','b'], ['A','b'], ['a','extra','b'])===null,'ambiguous shared boundary accepted');
  assert(analyzeConflict(['a','a'], ['A','a'], ['a','B'])===null,'ambiguous repeated lines accepted');
  const a = ["import one.Alpha;"], b = ["import two.Beta;"];
+ const large = Array.from({length:900},(_,i)=>`field-${i}`);
+ const ours = [...large], theirs = [...large]; ours[300]="local"; theirs[301]="incoming";
+ const wide = analyzeConflict(large,ours,theirs);
+ assert(wide?.kind==="safe" && wide.lines.join("\n")===[...large.slice(0,300),"local","incoming",...large.slice(302)].join("\n"),"lost small independent edits in a large region");
+ const imp = (names:string, mod="ui") => [`import { ${names} } from '${mod}';`];
+ const extended = analyzeConflict(imp("Button"),imp("Button, Icon"),imp("Button, Label"),"panel.ts");
+ assert(extended?.kind==="review" && extended.lines[0]===imp("Button, Icon, Label")[0],"lost independent import additions");
+ assert(analyzeConflict(imp("Button"),imp("Button, Icon"),imp("Button, Label","other"),"panel.ts")===null,"mixed modules");
+ assert(analyzeConflict(imp("Button"),imp("Button, Icon"),imp("Label"),"panel.ts")===null,"restored removed import");
  assert(analyzeConflict([],a,b,'Example.java')?.kind==='review','distinct Java imports missing review');
  assert(analyzeConflict([],a,["import two.Alpha;"],'Example.java')===null,'colliding import accepted');
  assert(analyzeConflict([],a,b,'file.txt')===null,'unsupported language guessed');

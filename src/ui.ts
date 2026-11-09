@@ -27,6 +27,8 @@ const ICONS: Record<string, string> = {
   plus: '<path d="M8 3.5v9M3.5 8h9"/>',
   check: '<path d="M3.5 8.5l3 3 6-7"/>',
   chevron: '<path d="M4 6.5L8 10.5l4-4"/>',
+  checkout: '<path d="M2 12h3a4 4 0 0 0 4-4V4m-3 3 3-3 3 3"/><circle cx="2.5" cy="12" r="1.3"/>',
+  branchPlus: '<path d="M4 4v7M4 9h2a4 4 0 0 0 4-4"/><circle cx="4" cy="3" r="1.4"/><circle cx="4" cy="13" r="1.4"/><path d="M12 1v5m-2.5-2.5h5"/>',
   right: '<path d="M6.5 4L10.5 8l-4 4"/>',
   search: '<circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2L14 14"/>',
   folder: '<path d="M2.5 4.5a1 1 0 0 1 1-1h3l1.5 1.6h4.5a1 1 0 0 1 1 1v6.4a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z"/>',
@@ -41,7 +43,7 @@ const ICONS: Record<string, string> = {
   pencil: '<path d="M11.2 2.8l2 2-7 7-2.6.6.6-2.6z"/>',
   tag: '<path d="M8.5 2.5H13v4.5l-6 6-4.5-4.5z"/><circle cx="10.6" cy="5" r=".9"/>',
   drag: '<circle cx="6" cy="4" r="1"/><circle cx="10" cy="4" r="1"/><circle cx="6" cy="8" r="1"/><circle cx="10" cy="8" r="1"/><circle cx="6" cy="12" r="1"/><circle cx="10" cy="12" r="1"/>',
-  compare: '<path d="M5 3v10M11 3v10"/><path d="M3 6.5h4M9 6.5h4"/>',
+  compare: '<path d="M2 5h11l-3-3M14 11H3l3 3"/>',
   clipboard: '<rect x="4" y="3" width="8" height="11" rx="1.2"/><path d="M6.5 3V2h3v1"/>',
 };
 
