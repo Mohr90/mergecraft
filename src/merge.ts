@@ -135,7 +135,7 @@ export class MergeEditor {
     this.planWorker=null;
     this.plans.clear();
     this.planMessage="";
-    if (!this.host.readConflict || this.siblings.length<2) return;
+    if (!this.host.readConflict || (this.siblings.length<2 && !this.batch.size)) return;
     const worker=new Worker(new URL("./workspace-worker.ts",import.meta.url),{type:"module"});
     this.planWorker=worker;
     try {

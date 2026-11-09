@@ -29,8 +29,9 @@ function splitMixed(region: Region, lines: Record<Side,string[]>): Region[] {
       // Positional splitting of adjacent replacements needs an identifiable
       // line on both sides (e.g. the same assignment or return statement).
       const key = (line:string) => line.trim().match(/^[\w.$]+(?:\s+[\w.$]+)*(?=[\s=(;:]|$)/)?.[0];
-      const aligned = length>1 && length===edit.text.length && edit.text.every((line,i)=>{
-        const prefix=key(base[edit.start+i]);
+      const keys = base.slice(edit.start,edit.end).map(key);
+      const aligned = length>1 && length===edit.text.length && new Set(keys).size===length && edit.text.every((line,i)=>{
+        const prefix=keys[i];
         return !!prefix && prefix===key(line);
       });
       if (aligned) {
