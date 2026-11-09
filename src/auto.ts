@@ -3,7 +3,7 @@ import { combineImports, extendNamedImport } from "./import-proposal";
 // Explicit text proposals, never semantic or automatic writes.
 function same(a:string[],b:string[]) {return a.length===b.length&&a.every((v,i)=>v===b[i]);}
 type Edit={start:number;end:number;text:string[]};
-function changes(base:string[],value:string[]):Edit[]|null {
+export function changes(base:string[],value:string[]):Edit[]|null {
  const n=base.length,m=value.length;
  if ((n+1)*(m+1)>250000) {
   // A large region can contain just a small edit. Bound the diff matrix by

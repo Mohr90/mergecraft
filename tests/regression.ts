@@ -434,6 +434,32 @@ await test('Auto Resolve previews a safe batch, preserves manual choices and und
  assert(!editor.resultText().includes('<<<<<<<')&&editor.resultText().endsWith('ours\n'),'batch lost manual choice');
  click('[data-act="undo"]');assert(editor.resultText()===before,'batch required multiple undo operations');assert(writes===0,'preview wrote files');
 });
+await test('workspace batch isolates competing changes and restores drafts in both files',async()=>{
+ const region={kind:"conflict",base:[0,3],ours:[0,3],theirs:[0,3]};
+ const a=await conflictFixture("check = 0\ntimeout = 30\nlog = 0\n","check = 1\ntimeout = 45\nlog = 0\n","check = 0\ntimeout = 60\nlog = 1\n",[region]);
+ a.path="a.ts";
+ const b={...a,path:"b.ts"};
+ const host={save:async()=>{throw Error("unexpected write")},onSaved(){},onError(){},onClose(){},readConflict:async(path:string)=>path===a.path?a:b};
+ const editor=new MergeEditor(host);
+ editor.siblings=[a,b].map(f=>({path:f.path,code:"UU"}));
+ const mount=(data:typeof a)=>{editor.load(data);editor.mount(fixture)};
+ mount(b);
+ const decisions=fixture.querySelectorAll<HTMLButtonElement>('[data-act="take-theirs"]');
+ assert(decisions.length===3,"mixed block not split");
+ decisions[1].click();const manual=editor.resultText();editor.stash();
+ mount(a);const original=editor.resultText();
+ const apply=fixture.querySelector<HTMLButtonElement>('[data-act="workspace-apply"]')!;
+ for(let i=0;i<150 && apply.disabled;i++) await new Promise(r=>setTimeout(r,10));
+ assert(!apply.disabled && apply.textContent?.includes("4"),"wrong workspace count");
+ apply.click();
+ assert(editor.resultText().startsWith("check = 1\n<<<<<<<") && editor.resultText().endsWith("log = 1\n"),"wrong partial merge");
+ assert(fixture.querySelectorAll(".unresolved").length===1,"disputed timeout must stay open");
+ editor.stash();mount(b);
+ assert(editor.resultText()==="check = 1\ntimeout = 60\nlog = 1\n","batch lost earlier decision");
+ click('[data-act="workspace-undo"]');assert(editor.resultText()===manual,"did not restore prior draft");
+ editor.stash();mount(a);assert(editor.resultText()===original,"did not undo other file");
+ editor.clearDrafts();
+});
 await test('large proposals are analyzed by a worker and leave the file untouched',async()=>{
  let writes=0;const editor=new MergeEditor({save:async()=>{writes++;return {ok:true,message:'ok'};},onSaved(){},onError(){},onClose(){}});
  const base='a'.repeat(6000)+'\nmiddle\nb\n';const ours='A'.repeat(6000)+'\nmiddle\nb\n';const theirs='a'.repeat(6000)+'\nmiddle\nB\n';

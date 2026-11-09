@@ -68,6 +68,13 @@ export const en = {
   "Links → rechts": "Left → right",
 
   "kombinierbar": "can be combined",
+  "Analyse fehlgeschlagen": "Analysis failed",
+  "{{0}} Dateien": "{{0}} files",
+  "{{0}} Bereiche übernehmen": "Apply {{0}} regions",
+  "Nächste Entscheidung": "Next decision",
+  "Sammelübernahme zurücknehmen": "Undo batch",
+  "Kombiniert": "Combined",
+  "Herkunft der Ergebniszeilen": "Result line sources",
   "in Analyse": "being analyzed",
   "manuell entscheiden": "need a manual decision",
   "Weitere Aktionen": "More actions",

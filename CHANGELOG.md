@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 — 2026-11-09
+
+- Resolve independent edits inside mixed text conflicts while keeping competing edits open.
+- Analyze conflict files together, apply safe results to drafts, undo the batch and navigate remaining decisions.
+- Inspect branch labels alongside proposed result lines and compare short conflicts directly against their base.
+
 ## 1.1.0 — 2026-11-09
 
 - Resolve independent edits inside large conflict regions and distinguish pending analysis from manual decisions.

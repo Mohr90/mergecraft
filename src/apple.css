@@ -702,3 +702,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .branch-actions .icon-btn { width:32px; height:32px; flex:none; border-radius:8px; }
 .branch-actions .icon-btn:hover { background:var(--bg-3); }
 .branch-actions .icon-btn.danger:hover { color:var(--red); background:var(--red-soft); }
+
+.conflict-values { display:grid; grid-template-columns:auto minmax(0,1fr); gap:.25em .75em; margin:.5em; font-size:.85em }
+.conflict-values dt,.result-origins small { color:var(--fg-3); overflow-wrap:anywhere }
+.conflict-values dd,.result-origins code { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font-family:monospace }
+.result-origins > div { display:grid; grid-template-columns:minmax(4em,25%) 1fr; gap:.6em; padding:.2em }
+.workspace-analysis { flex-wrap:wrap }

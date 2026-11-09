@@ -129,6 +129,7 @@ class App implements PanelCtx {
       canAbort:()=>!this.standalone&&!!this.snap?.merging,
       onAbort:()=>this.mergeAbort(),
       onClose: () => void this.requestCloseOverlay(),
+      readConflict: path => api.conflictData(path),
       onSwitch: (path) => void this.openMerge(path),
     });
     this.diffView = new DiffView(() => void this.requestCloseOverlay());
