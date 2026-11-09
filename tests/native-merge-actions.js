@@ -9,7 +9,33 @@
  const content=async(path)=>{const d=await invoke('file_diff',{rev_a:'HEAD',rev_b:'WORK',path,label_a:null,label_b:null});return d.b_text;};
  try {
   await until(()=>document.querySelector('.branches-panel'));
-  const initial=await invoke('status');assert(initial.conflicts.length===8,'fixture must contain 8 Git conflicts');
+  const initial=await invoke('status');assert(initial.conflicts.length===10,'fixture must contain 10 Git conflicts');
+  await open('second.ts');
+  const choices=()=>Array.from(document.querySelectorAll('[data-act="take-theirs"]'));
+  assert(choices().length===3,'expected a partially resolvable mixed Git conflict');
+  choices()[1].click();
+  const earlierDraft=app.mergeEditor.resultText();
+  await open('first.ts');
+  const beforeBatch=app.mergeEditor.resultText();
+  await until(()=>document.querySelector('[data-act="workspace-apply"]:not(:disabled)'));
+  click('[data-act="workspace-apply"]');
+  assert(app.mergeEditor.resultText().startsWith('check = 1\n<<<<<<<'),'local independent edit lost');
+  assert(app.mergeEditor.resultText().endsWith('log = 1\n'),'incoming independent edit lost');
+  assert((await invoke('status')).conflicts.length===10,'batch prematurely wrote to index');
+  await open('second.ts');
+  assert(app.mergeEditor.resultText()==='check = 1\ntimeout = 60\nlog = 1\n','batch changed prior manual choice');
+  click('[data-act="undo"]');
+  assert(app.mergeEditor.resultText()===earlierDraft,'undo lost earlier manual decision');
+  await open('first.ts');
+  assert(app.mergeEditor.resultText()===beforeBatch,'batch not undone across files');
+  await until(()=>document.querySelector('[data-act="workspace-apply"]:not(:disabled)'));
+  click('[data-act="workspace-apply"]');
+  document.querySelector('.unresolved [data-act="take-theirs"]').click();
+  await saved('first.ts');
+  await open('second.ts');
+  await saved('second.ts');
+  for(const path of ['first.ts','second.ts']) assert(await content(path)==='check = 1\ntimeout = 60\nlog = 1\n','wrong saved text');
+  notes.push('PASS native multi-file mixed conflict, grouped Undo, preserved manual decision and exact staged results');
   const beforeGuard=await content('auto.txt');
   const context=await invoke('conflict_data',{path:'auto.txt'});
   for(const args of [{expected_working:'stale working file'}, {expected_sources:['stale base','stale ours','stale theirs']}]) {
@@ -38,7 +64,7 @@
   assert(await content('clean.txt')==='local\nmiddle\nincoming\n','nonconflicting edits lost');assert(await content('notes.txt')==='leave me alone\n','unrelated worktree changed');
   notes.push('PASS modify/delete choice, binary bytes, automatic nonconflicting edits and unrelated worktree preserved');
   assert((await invoke('status')).conflicts.length===0,'conflicts remain');await invoke('merge_continue');assert(!(await invoke('snapshot')).merging,'merge not finalized');
-  notes.push('PASS merge completed with all 8 original conflicts resolved');
+  notes.push('PASS merge completed with all 10 original conflicts resolved');
  }catch(e){notes.push('FAIL '+(e.stack||e));}
  await invoke('selftest_report',{text:notes.join('\n')});
 })();

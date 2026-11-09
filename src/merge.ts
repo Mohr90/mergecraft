@@ -16,6 +16,7 @@ export interface MergeHost {
   canAbort?: () => boolean;
   onAbort?: () => Promise<void>;
   takeSide?: (side: "ours" | "theirs") => Promise<void>;
+  readConflict?: (path:string)=>Promise<ConflictData>;
   onSwitch?: (path: string) => void;
 }
 
@@ -25,12 +26,8 @@ interface Resolution {
   text?: string[];
 }
 
-export function splitLines(text: string): string[] {
-  if (text === "") return [];
-  const lines = text.split("\n");
-  if (text.endsWith("\n")) lines.pop();
-  return lines;
-}
+import {prepareConflict, splitLines, type PlannedRegion} from "./merge-plan";
+export {splitLines} from "./merge-plan";
 
 const kindHints = (): Record<string, string> => ({
   unchanged: "",
@@ -93,9 +90,9 @@ export class MergeEditor {
   private scope="";
   setScope(scope:string) { if(scope!==this.scope){this.clearDrafts();this.scope=scope;} }
   private fingerprint(data:ConflictData):string {return JSON.stringify([data.root,data.path,data.base,data.ours,data.theirs,data.merged.text,data.merged.exists,data.ours_label,data.theirs_label]);}
-  hasStaleDraft(data:ConflictData):boolean {const draft=this.drafts.get(data.path);return !!draft?.dirty && draft.fingerprint!==this.fingerprint(data);}
-  dropDraft(path:string) {this.drafts.delete(path);}
-  forget(path:string) {this.drafts.delete(path);this.fileState.set(path,"resolved");}
+  hasStaleDraft(data:ConflictData):boolean {const draft=this.drafts.get(data.path);const batch=this.batch.get(data.path);return (!!draft?.dirty && draft.fingerprint!==this.fingerprint(data)) || (!!batch?.pending && batch.fingerprint!==this.fingerprint(data));}
+  dropDraft(path:string) {this.batch.delete(path);this.drafts.delete(path);}
+  forget(path:string) {this.batch.delete(path);this.drafts.delete(path);this.fileState.set(path,"resolved");}
   private error(message:string) {this.inlineError=message;const node=this.root?.querySelector<HTMLElement>('.merge-inline-error');if(node){node.textContent=message;node.hidden=false;}this.host.onError(message);}
   private analyze() {
     this.worker?.terminate();this.worker=null;this.proposals.clear();
@@ -125,8 +122,140 @@ export class MergeEditor {
       } else this.proposals.set(index,analyzeConflict(base,ours,theirs,this.data.path));
     }
   }
+  private nextFileDecision:{path:string;index:number}|null=null;
+  private planGeneration=0;
+  private planWorker:Worker|null=null;
+  private plans=new Map<string,{fingerprint:string;regions:PlannedRegion[]}>();
+  private batch=new Map<string,{fingerprint:string;choices:Map<number,Resolution>;pending:boolean}>();
+  private planMessage="";
+
+  private async analyzeWorkspace(source:ConflictData) {
+    const generation=++this.planGeneration;
+    this.planWorker?.terminate();
+    this.planWorker=null;
+    this.plans.clear();
+    this.planMessage="";
+    if (!this.host.readConflict || (this.siblings.length<2 && !this.batch.size)) return;
+    const worker=new Worker(new URL("./workspace-worker.ts",import.meta.url),{type:"module"});
+    this.planWorker=worker;
+    try {
+      for (const {path} of this.siblings) {
+        const file=path===source.path ? source : await this.host.readConflict(path);
+        if (generation!==this.planGeneration) return;
+        if (file.root!==source.root || file.path!==path) throw new Error(t("Datei wurde außerhalb des Editors geändert"));
+        const regions=await new Promise<PlannedRegion[]>((resolve,reject)=>{
+          worker.onmessage=e=>resolve(e.data);
+          worker.onerror=()=>reject(new Error(t("Analyse fehlgeschlagen")));
+          worker.postMessage(file);
+        });
+        if (generation!==this.planGeneration) return;
+        this.plans.set(path,{fingerprint:this.fingerprint(file),regions});
+      }
+    } catch (e) {
+      if (generation===this.planGeneration) this.planMessage=String(e);
+    } finally {
+      worker.terminate();
+      if (generation===this.planGeneration) {this.planWorker=null;this.updateHeader();}
+    }
+  }
+
+  private remainingPlan() {
+    const remaining:{path:string;region:PlannedRegion}[]=[];
+    for (const [path,file] of this.plans) {
+      const draft=this.drafts.get(path);
+      const active=path===this.data.path;
+      if ((!active && draft && draft.fingerprint!==file.fingerprint) || this.fileState.get(path)==="resolved") continue;
+      if (active ? this.rawMode : draft?.state.raw) {
+        remaining.push({path,region:{index:-1,proposal:null}});
+        continue;
+      }
+      const chosen=active ? this.res : draft?.state.res;
+      for (const region of file.regions) {
+        if (!chosen?.has(region.index) && !(this.batch.get(path)?.pending && this.batch.get(path)?.choices.has(region.index))) remaining.push({path,region});
+      }
+    }
+    return remaining;
+  }
+
+  private updateWorkspaceBar() {
+    const bar=this.root?.querySelector<HTMLElement>(".workspace-analysis");
+    if (!bar) return;
+    const pending=!!this.planWorker;
+    const remaining=this.remainingPlan(),safe=remaining.filter(x=>x.region.proposal?.kind==="safe").length;
+    const reviews=remaining.filter(x=>x.region.proposal?.kind==="review").length;
+    const summary=bar.querySelector("span")!;
+    summary.textContent=this.planMessage || (pending ? t("Bereich wird analysiert …") :
+      [m`${this.plans.size} Dateien`,safe+" "+t("kombinierbar"),reviews+" "+t("Vorschlag prüfen"),(remaining.length-safe-reviews)+" "+t("manuell entscheiden")].join(" · "));
+    const apply=bar.querySelector<HTMLButtonElement>('[data-act="workspace-apply"]')!;
+    apply.disabled=pending || !!this.planMessage || !safe || this.saving || !!this.batch.size;
+    apply.textContent=m`${safe} Bereiche übernehmen`;
+    bar.querySelector<HTMLButtonElement>('[data-act="workspace-undo"]')!.hidden=!this.batch.size;
+    bar.querySelector<HTMLButtonElement>('[data-act="workspace-next"]')!.disabled=pending || !remaining.length || this.saving;
+  }
+
+  private takeBatchForCurrent() {
+    const entry=this.batch.get(this.data.path);
+    if (!entry?.pending || entry.fingerprint!==this.fingerprint(this.data) || this.rawMode) return;
+    entry.pending=false;
+    this.checkpoint("Auto Resolve · Σ");
+    for (const [index,choice] of entry.choices) if (!this.res.has(index)) this.res.set(index,choice);
+    this.restore(this.snapshot());
+  }
+
+  private applyWorkspace() {
+    if (this.planWorker || this.planMessage || this.batch.size) return;
+    for (const {path,region} of this.remainingPlan()) {
+      if (region.proposal?.kind!=="safe") continue;
+      let entry=this.batch.get(path);
+      if (!entry) {
+        entry={fingerprint:this.plans.get(path)!.fingerprint,choices:new Map(),pending:true};
+        this.batch.set(path,entry);
+      }
+      entry.choices.set(region.index,{choice:"auto",text:region.proposal.lines});
+    }
+    this.takeBatchForCurrent();
+    this.updateHeader();
+  }
+
+  private undoWorkspace() {
+    const strip=(res:Map<number,Resolution>,choices:Map<number,Resolution>)=>{
+      for (const [index,choice] of choices) if (res.get(index)===choice) res.delete(index);
+    };
+    for (const [path,{choices}] of this.batch) {
+      const draft=this.drafts.get(path);
+      if (draft) {
+        draft.past=draft.past.filter(step=>step.label!=="Auto Resolve · Σ");
+        draft.future=draft.future.filter(step=>step.label!=="Auto Resolve · Σ");
+        strip(draft.state.res,choices);
+        for (const step of [...draft.past,...draft.future]) strip(step.state.res,choices);
+        if (!draft.state.raw && !draft.state.res.size && !draft.initial.res.size) draft.dirty=false;
+      }
+      if (path===this.data.path) {
+        this.past=this.past.filter(step=>step.label!=="Auto Resolve · Σ");
+        this.future=this.future.filter(step=>step.label!=="Auto Resolve · Σ");
+        strip(this.res,choices);
+        for (const step of [...this.past,...this.future]) strip(step.state.res,choices);
+      }
+    }
+    this.batch.clear();
+    this.restore(this.snapshot());
+  }
+
+  private nextDecision() {
+    const all=this.remainingPlan();
+    const current=all.filter(x=>x.path===this.data.path);
+    const next=current.find(x=>x.region.index>this.current) ??
+      all.find(x=>x.path!==this.data.path) ?? current[0];
+    if (!next) return;
+    if (next.path!==this.data.path) {
+      this.nextFileDecision={path:next.path,index:next.region.index};
+      this.host.onSwitch?.(next.path);
+    }
+    else if (next.region.index>=0) this.jumpTo(next.region.index);
+  }
+
   private drafts = new Map<string, {fingerprint:string;state:EditorSnapshot;past:{state:EditorSnapshot;label:string}[];future:{state:EditorSnapshot;label:string}[];initial:EditorSnapshot;saved:string;scroll:number;dirty:boolean}>();
-  clearDrafts() { this.drafts.clear();this.knownFiles.clear();this.fileState.clear();this.worker?.terminate();this.worker=null; }
+  clearDrafts() { this.planGeneration++;this.planWorker?.terminate();this.planWorker=null;this.plans.clear();this.batch.clear(); this.drafts.clear();this.knownFiles.clear();this.fileState.clear();this.worker?.terminate();this.worker=null; }
   stash() {
     if (!this.data || !this.root || this.fileState.get(this.data.path)==="resolved") return;
     this.fileState.set(this.data.path,this.openRegions().length);
@@ -140,7 +269,7 @@ export class MergeEditor {
   // ------------------------------------------------------------ Zustand
 
   load(data: ConflictData) {
-    this.data = data;
+    this.data = prepareConflict(data);
     this.touched = false;
     this.past=[];this.future=[];this.typingKey="";
     this.rawEl = null;
@@ -156,18 +285,19 @@ export class MergeEditor {
     this.baseLines = splitLines(data.base.text);
     this.savedText=data.working_modified ? data.merged.text : this.resultText();
     this.analyze();this.inlineError="";
+    void this.analyzeWorkspace(data);
   }
 
   isSaving():boolean {return this.saving;}
 
   /** Wurde seit dem Laden etwas entschieden oder getippt? */
   hasUnsavedChanges(): boolean {
-    return this.touched || [...this.drafts].some(([path,draft])=>path!==this.data.path && draft.dirty);
+    return this.touched || [...this.batch.values()].some(entry=>entry.pending) || [...this.drafts].some(([path,draft])=>path!==this.data.path && draft.dirty);
   }
 
   /** Änderungen verwerfen (nach Rückfrage). */
   discardChanges() {
-    this.touched = false;this.drafts.clear();
+    this.touched = false;this.drafts.clear();this.batch.clear();
   }
 
   private needsDecision(r: Region): boolean {
@@ -294,6 +424,10 @@ export class MergeEditor {
       this.savedText=draft.saved;this.initial=draft.initial;this.past=draft.past;this.future=draft.future;this.restore(draft.state);
       const panes=this.root.querySelector('.panes');if(panes)panes.scrollTop=draft.scroll;
     }
+    this.takeBatchForCurrent();
+    const next=this.nextFileDecision;
+    this.nextFileDecision=null;
+    if (next?.path===this.data.path && this.openRegions().includes(next.index)) this.jumpTo(next.index);
   }
 
   /** Rebuild chrome from the existing editor model without reopening the file or resetting undo history. */
@@ -331,6 +465,7 @@ export class MergeEditor {
   private undo(redo=false) {
     if(this.saving)return;
     const from=redo?this.future:this.past,to=redo?this.past:this.future;
+    if (!redo && this.batch.size && from[from.length-1]?.label==="Auto Resolve · Σ") return this.undoWorkspace();
     const entry=from.pop();if(!entry)return;
     to.push({state:this.snapshot(),label:entry.label});this.restore(entry.state);
     const area=this.rawMode ? this.root?.querySelector<HTMLTextAreaElement>(".raw-edit") : this.nodes.get(this.current)?.querySelector<HTMLTextAreaElement>(".cf-edit");
@@ -397,6 +532,11 @@ export class MergeEditor {
     const width=el('label','merge-width',h`Ergebnisbreite <input type="range" min="30" max="60" step="1" value="${this.resultWidth}" aria-label="Ergebnisbreite">`);
     width.querySelector('input')!.addEventListener('input',event=>{this.resultWidth=Number((event.target as HTMLInputElement).value);wrap.style.setProperty('--merge-result-width',`${this.resultWidth}%`);});
     direction.appendChild(width);
+    if (this.host.readConflict && (this.siblings.length>1 || this.batch.size>0)) {
+      const bar=el("div","merge-review-bar workspace-analysis");
+      bar.innerHTML=h`<span aria-live="polite"></span><button class="btn" data-act="workspace-apply"></button><button class="btn ghost" data-act="workspace-next">Nächste Entscheidung</button><button class="btn ghost" data-act="workspace-undo">Sammelübernahme zurücknehmen</button>`;
+      wrap.appendChild(bar);
+    }
     const inline=el('div','merge-inline-error');inline.setAttribute('role','alert');inline.hidden=!this.inlineError;inline.textContent=this.inlineError;wrap.appendChild(inline);
     const secondary=el('details','merge-tools');
     secondary.innerHTML=h`<summary>Weitere Aktionen</summary>`;
@@ -535,8 +675,19 @@ export class MergeEditor {
       const source = el("pre");
       source.textContent = base.length ? base.join("\n") : t("An dieser Stelle war die Basis leer.");
       original.appendChild(source);
+      if (r.base[1]===1 && r.ours[1]===1 && r.theirs[1]===1) {
+        const comparison=el("dl","conflict-values");
+        for (const [label,value] of [[t("Basis"),base[0]],[this.data.ours_label,this.oursLines[r.ours[0]]],[this.data.theirs_label,this.theirsLines[r.theirs[0]]]]) {
+          const term=el("dt"), definition=el("dd");
+          term.textContent=label;definition.textContent=value;comparison.append(term,definition);
+        }
+        block.appendChild(comparison);
+      }
       block.appendChild(original);
       if (!res) block.appendChild(this.proposalPanel(i));
+      else if (res.choice==="auto") {
+        block.appendChild(this.lineSources(r,res.text??[]));
+      }
       resultCol.appendChild(block);
     } else {
       const lines = this.autoLines(r);
@@ -562,6 +713,24 @@ export class MergeEditor {
     return node;
   }
 
+  private lineSources(region:Region,lines:string[]):HTMLElement {
+    const left=new Set(this.regionSide(region,"ours"));
+    const right=new Set(this.regionSide(region,"theirs"));
+    const detail=el("details","merge-base");
+    detail.innerHTML=h`<summary>Herkunft der Ergebniszeilen</summary>`;
+    const origins=el("div","result-origins");
+    for (const line of lines) {
+      const local=left.has(line),incoming=right.has(line);
+      const row=el("div"),label=el("small"),code=el("code");
+      row.className=local===incoming ? "" : local ? "from-ours" : "from-theirs";
+      label.textContent=local && incoming ? this.data.ours_label+" + "+this.data.theirs_label :
+        local ? this.data.ours_label : incoming ? this.data.theirs_label : t("Kombiniert");
+      code.textContent=line;row.append(label,code);origins.appendChild(row);
+    }
+    detail.appendChild(origins);
+    return detail;
+  }
+
   private proposalPanel(i: number): HTMLElement {
     const panel = el("div", "proposal-panel");
     const proposal = this.autoCandidate(i);
@@ -573,6 +742,7 @@ export class MergeEditor {
     panel.appendChild(reason);
     if (proposal !== null) {
         panel.insertAdjacentHTML("beforeend",h`<details class="auto-suggestion"><summary>Automatischen Vorschlag ansehen</summary><pre>${syntaxText(this.data.path,proposal.join("\n")||t("(leeres Ergebnis)"))}</pre><div><span>Noch nicht übernommen</span><button class="mini primary" data-act="auto-region">Vorschlag übernehmen</button></div></details>`);
+        panel.querySelector("details")?.appendChild(this.lineSources(this.data.regions[i],proposal));
     }
     return panel;
   }
@@ -611,6 +781,7 @@ export class MergeEditor {
   private updateHeader() {
     if (!this.root) return;
     const wrap = this.root;
+    this.updateWorkspaceBar();
     const conflicts = this.conflictIndices();
     const open = this.openRegions();
     const auto = this.data.regions.filter((r) => r.kind === "ours_only" || r.kind === "theirs_only" || r.kind === "both_same").length;
@@ -835,6 +1006,9 @@ export class MergeEditor {
     const act = (target.closest("[data-act]") as HTMLElement | null)?.dataset.act;
     if (!act || this.saving || (target.closest("button") as HTMLButtonElement | null)?.disabled) return;
     switch (act) {
+      case "workspace-apply": return this.applyWorkspace();
+      case "workspace-next": return this.nextDecision();
+      case "workspace-undo": return this.undoWorkspace();
       case "undo": return this.undo();
       case "redo": return this.undo(true);
       case "reset-preview": void this.resetPreview();return;
@@ -1047,6 +1221,7 @@ export class MergeEditor {
       if (markResolved && hasMarkers) { this.error(t("Entferne zuerst alle Konfliktmarker oder speichere die Datei als Zwischenstand.")); return; }
       const r = await this.saveOnce(text, markResolved && !hasMarkers);
       if (r.ok) {
+        this.batch.delete(this.data.path);
         this.drafts.delete(this.data.path);this.data.merged.text=text;this.savedText=text;this.typingKey="";
         this.touched = false;
         this.updateDirtyState();
@@ -1066,6 +1241,7 @@ export class MergeEditor {
     if(markResolved && /^(<{7}|={7}|>{7}|\|{7})/m.test(result)) { this.error(t("Entferne zuerst alle Konfliktmarker aus dem Ergebnis.")); return; }
     const r = await this.saveOnce(result, markResolved);
     if (r.ok) {
+        this.batch.delete(this.data.path);
       this.drafts.delete(this.data.path);this.data.merged.text=result;this.savedText=result;this.typingKey="";
       this.touched = false;
       this.updateDirtyState();
