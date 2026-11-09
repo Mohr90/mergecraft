@@ -1,6 +1,6 @@
 # Mergecraft roadmap
 
-## [v1.1.0 · Conflict resolution and branch actions](https://github.com/Mohr90/mergecraft/milestone/4)
+## [Completed in v1.1.0 · Conflict resolution and branch actions](https://github.com/Mohr90/mergecraft/milestone/4)
 
 1. Preview independent additions to the same named JavaScript or TypeScript import. Show the exact result before applying it. Divergent modules, removed names and ambiguous bindings require a manual decision.
    For large conflict regions, analyze the changed portion within the existing memory budget. Show pending analysis separately from manual decisions.

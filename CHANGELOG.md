@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 — 2026-11-09
+
+- Resolve independent edits inside large conflict regions and distinguish pending analysis from manual decisions.
+- Preview independent additions to the same named JavaScript or TypeScript import before accepting the result.
+- Distinguish checkout, compare and branch creation with dedicated icons.
+
 ## 1.0.1 — 2026-11-06
 
 - Clean up selected local branches together, with a select-all preview and explicit confirmation for branches with their own commits.
