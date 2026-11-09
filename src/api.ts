@@ -233,6 +233,7 @@ export const api = {
   status: () => call<RepoStatus>("status"),
   history: (limit = 300, all = false, path?: string) =>
     call<CommitInfo[]>("history", { limit, all, path: path ?? null }),
+  branchLog: (name: string, outgoing: boolean) => call<CommitInfo[]>("branch_log", {name, outgoing}),
   commitFiles: (hash: string) => call<FileChange[]>("commit_files", { hash }),
   conflicts: () => call<ConflictFile[]>("conflicts"),
 

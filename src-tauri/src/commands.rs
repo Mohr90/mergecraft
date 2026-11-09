@@ -202,6 +202,11 @@ pub fn branches(state: State<AppState>) -> Result<Vec<BranchInfo>, String> {
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub fn branch_log(state: State<AppState>, name: String, outgoing: bool) -> Result<Vec<CommitInfo>, String> {
+    git_of(&state)?.branch_log(&name, outgoing)
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub fn tags(state: State<AppState>) -> Result<Vec<TagInfo>, String> {
     git_of(&state)?.tags()
 }

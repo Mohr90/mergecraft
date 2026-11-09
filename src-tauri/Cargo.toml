@@ -1,6 +1,6 @@
 [package]
 name = "mergecraft"
-version = "1.2.0"
+version = "1.3.0"
 description = "Mergecraft - Git-Client mit 3-Wege-Merge-Editor"
 edition = "2021"
 license = "MIT"

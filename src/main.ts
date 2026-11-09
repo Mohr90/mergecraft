@@ -49,6 +49,9 @@ class App implements PanelCtx {
     this.root.querySelectorAll("[data-app-info]").forEach(button => { button.outerHTML = this.updates.button(); });
   });
   historyPath: string | null = null;
+  historyBranch: string | null = null;
+  historyOutgoing = false;
+  private lastFocusRefresh = 0;
   private previewSelection: {path:string;area:"staged"|"work"|"untracked"} | null = null;
   private previewRequest = 0;
   private snap: RepoSnapshot | null = null;
@@ -210,12 +213,12 @@ class App implements PanelCtx {
         // Statusfehler sichtbar melden; keinen leeren, vermeintlich sauberen Status vortäuschen.
         api.branches(),
         api.status(),
-        wantHistory ? (this.historyPath ? api.fileHistory(this.historyPath) : api.history(300, false)).catch(() => [] as CommitInfo[]) : Promise.resolve(null),
+        wantHistory ? (this.historyPath ? api.fileHistory(this.historyPath) : this.historyBranch ? api.branchLog(this.historyBranch, this.historyOutgoing) : api.history(300, false)).catch(() => [] as CommitInfo[]) : Promise.resolve(null),
         api.tags(),
       ]);
       if (this.snap?.root !== snap.root) {
         this.mergeEditor.clearDrafts();this.mergeError="";
-        this.previewSelection=null; this.historyPath=null; ++this.previewRequest;
+        this.previewSelection=null; this.historyPath=null; this.historyBranch=null; this.historyOutgoing=false; ++this.previewRequest;
       }
       this.snap = snap;
       this.branchesList = branches;
@@ -302,6 +305,11 @@ class App implements PanelCtx {
         case "refresh":
           void this.refresh(true);
           break;
+        case "outgoing": {
+          const current = this.branchesList.find(b => b.is_current);
+          if (current) void this.showBranchHistory(current, !!current.upstream && current.tracking_known && current.ahead > 0);
+          break;
+        }
       }
     });
 
@@ -352,6 +360,15 @@ class App implements PanelCtx {
     if (!this.keysBound) {
       this.keysBound = true;
       window.addEventListener("keydown", (e) => this.onGlobalKey(e));
+      const refreshOnFocus = () => {
+        if (document.hidden || !this.hasRepo || this.standalone || this.busy) return;
+        const now = Date.now();
+        if (now - this.lastFocusRefresh < 500) return;
+        this.lastFocusRefresh = now;
+        void this.refresh(true);
+      };
+      window.addEventListener("focus", refreshOnFocus);
+      document.addEventListener("visibilitychange", refreshOnFocus);
     }
   }
 
@@ -508,7 +525,7 @@ class App implements PanelCtx {
         <span class="ab">${ab}</span>
         ${icon("chevron", 13)}
       </button>
-      ${sync ? `<span class="sync-indicator sync-${sync.tone}" title="${esc(sync.detail)}" data-sync-state="${sync.tone}">${icon(sync.tone==="ok"?"check":sync.tone==="pending"?"push":"info",14)}<span>${esc(sync.label)}</span></span>` : ""}
+      ${sync ? `<button class="sync-indicator sync-${sync.tone}" type="button" data-act="outgoing" title="${esc(sync.detail)} · ${esc(t("Commits ansehen"))}" aria-label="${esc(sync.label)} · ${esc(t("Commits ansehen"))}" data-sync-state="${sync.tone}">${icon(sync.tone==="ok"?"check":sync.tone==="pending"?"push":"info",14)}<span>${esc(sync.label)}</span></button>` : ""}
       ${s.merging ? h`<span class="chip merging">${icon("merge", 12)} Merge noch nicht committet</span>` : ""}
       ${s.rebasing ? h`<span class="chip merging">Rebase läuft</span>` : ""}
       ${s.cherry_picking ? h`<span class="chip merging">Cherry-pick läuft</span>` : ""}
@@ -897,9 +914,23 @@ class App implements PanelCtx {
     const root = this.snap?.root;
     const request = ++this.previewRequest;
     this.historyPath = path || null;
+    this.historyBranch = null; this.historyOutgoing = false;
     try {
       const commits = path ? await api.fileHistory(path) : await api.history(300, false);
       if (request !== this.previewRequest || root !== this.snap?.root) return;
+      this.historyList = commits; this.selected = null; this.selectedFiles = [];
+      this.tab = "history"; this.overlay = "none"; this.render();
+    } catch(e) { toast(String(e), "err"); }
+  }
+
+  async showBranchHistory(branch: BranchInfo, outgoing = false) {
+    if (!(await this.leaveMerge())) return;
+    const root = this.snap?.root;
+    const request = ++this.previewRequest;
+    try {
+      const commits = await api.branchLog(branch.name, outgoing);
+      if (request !== this.previewRequest || root !== this.snap?.root) return;
+      this.historyPath = null; this.historyBranch = branch.name; this.historyOutgoing = outgoing;
       this.historyList = commits; this.selected = null; this.selectedFiles = [];
       this.tab = "history"; this.overlay = "none"; this.render();
     } catch(e) { toast(String(e), "err"); }

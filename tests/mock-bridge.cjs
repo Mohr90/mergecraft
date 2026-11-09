@@ -1,6 +1,6 @@
 // Synthetic bridge shared by application and language-switch tests.
 module.exports = function mockBridge() {
-      const state={current:'main',merging:false,resolved:[],created:[],stashes:[],parked:false,rolledPaths:[]};
+      const state={current:'main',merging:false,resolved:[],created:[],stashes:[],parked:false,rolledPaths:[],externalAhead:null};
       window.testState=state;
       window.testCalls=[];
       window.__TAURI_INTERNALS__={invoke:async(cmd,args={})=>{
@@ -28,7 +28,11 @@ module.exports = function mockBridge() {
           const branches=await mockInvoke('branches');
           for(const name of state.created)branches.push({...branches[0],name,checkout_name:name,full_name:'refs/heads/'+name,upstream:null});
           if(window.testManyBranches)for(let i=0;i<326;i++)branches.push({...branches[0],name:'origin/work/feature-'+String(i).padStart(3,'0'),full_name:'refs/remotes/origin/work/feature-'+String(i).padStart(3,'0'),is_remote:true,is_current:false,upstream:null});
-          return branches.map(b=>({...b,is_current:b.name===state.current}));
+          return branches.map(b=>({...b,is_current:b.name===state.current,...(b.name==='main' && state.externalAhead!==null?{ahead:state.externalAhead}:{})}));
+        }
+        if(cmd==='branch_log') {
+          const commits=await mockInvoke('history');
+          return args.outgoing ? commits.slice(0,state.externalAhead??2) : commits;
         }
         if(cmd==='status'){
           const st=await mockInvoke('status');st.merging=state.merging;

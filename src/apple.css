@@ -553,6 +553,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 
 /* Synchronization is persistent context, notifications remain temporary feedback. */
 .sync-indicator { display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border-radius:7px; font-size:11px; line-height:1.4; min-width:0; max-width:260px; }
+.sync-indicator { border:0; cursor:pointer; font-family:inherit; text-align:left; }
+.sync-indicator:hover { filter:brightness(.94); }
+.sync-indicator:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .sync-indicator > svg { flex:none; }
 .sync-indicator > span { overflow-wrap:anywhere; }
 .sync-ok { color:var(--green); background:var(--green-soft); }

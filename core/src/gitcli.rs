@@ -584,6 +584,25 @@ impl Git {
         self.log_from(limit, all, path, None, false)
     }
 
+    /// History of a branch without checking it out; outgoing commits use its
+    /// locally known upstream ref, so this never needs network access.
+    pub fn branch_log(&self, name: &str, outgoing: bool) -> Result<Vec<CommitInfo>, String> {
+        let branch = self.branches()?.into_iter()
+            .find(|branch| branch.name == name)
+            .ok_or_else(|| format!("Branch nicht gefunden: {name}"))?;
+        let revision = if outgoing {
+            let upstream = branch.upstream.as_ref()
+                .ok_or("Dieser Branch hat kein Push-Ziel.")?;
+            if !branch.tracking_known {
+                return Err("Tracking-Branch nicht verfügbar. Bitte Fetch ausführen.".into());
+            }
+            format!("{upstream}..{}", branch.full_name)
+        } else {
+            branch.full_name
+        };
+        self.log_from(300, false, None, Some(&revision), false)
+    }
+
     pub fn commit_info(&self, revision: &str) -> Result<CommitInfo, String> {
         let hash = self.run([
             "rev-parse",

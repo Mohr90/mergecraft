@@ -71,6 +71,7 @@ fn main() {
             commands::commit_info,
             commands::status,
             commands::history,
+            commands::branch_log,
             commands::commit_files,
             commands::conflicts,
             // Diffs

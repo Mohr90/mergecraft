@@ -52,7 +52,7 @@ Syntax colors in diffs and merge panes make keywords, strings, comments, numbers
 
 </details>
 
-See the [versioned roadmap](docs/roadmap.md) for the Auto Resolve improvements in v1.2.0.
+See the [versioned roadmap](docs/roadmap.md) for the v1.3.0 outgoing-commit and branch-history workflow.
 
 ## German or English
 
