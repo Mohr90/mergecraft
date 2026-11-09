@@ -52,7 +52,7 @@ Syntax colors in diffs and merge panes make keywords, strings, comments, numbers
 
 </details>
 
-See the [versioned roadmap](docs/roadmap.md) for the three focused improvements planned for v1.5.0.
+See the [versioned roadmap](docs/roadmap.md) for the conflict resolution and branch action improvements delivered in v1.1.0.
 
 ## German or English
 
