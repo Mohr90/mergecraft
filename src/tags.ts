@@ -21,7 +21,7 @@ export function renderTags(ctx: TagContext, state: TagViewState): HTMLElement {
   const wrap = el("div", "panel-pad tags-panel");
   const all = ctx.tags();
   const snap = ctx.snapshot();
-  const blocked = !!(snap?.merging || snap?.rebasing || snap?.cherry_picking);
+  const blocked = !!(snap?.merging || snap?.rebasing || snap?.cherry_picking || snap?.reverting);
   wrap.innerHTML = h`
     <div class="branch-toolbar">
       <header class="page-heading"><div><h1>Tags</h1><p class="muted">Releases und markierte Stände deines Repositories.</p></div></header>

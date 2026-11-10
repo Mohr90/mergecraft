@@ -1,5 +1,13 @@
 # Mergecraft roadmap
 
+## [v1.4.0 · Safer merges and focused commits](https://github.com/Mohr90/mergecraft/milestone/7)
+
+1. [Preview merges with real three-way conflict analysis before starting](https://github.com/Mohr90/mergecraft/issues/26).
+2. [Stage and unstage complete text hunks directly from the diff](https://github.com/Mohr90/mergecraft/issues/27).
+3. [Revert an ordinary commit with preview, conflict resolution and abort](https://github.com/Mohr90/mergecraft/issues/28).
+
+The scope stays focused on Git: explicit actions, stale-state checks, German/English, keyboard access and real repository regression tests.
+
 ## [v1.3.0 · Outgoing commits and branch history](https://github.com/Mohr90/mergecraft/milestone/6)
 
 - [Refresh local status on focus without fetching from the network](https://github.com/Mohr90/mergecraft/issues/24).

@@ -62,6 +62,7 @@ jobs:
           python3 tests/native-merge.py target/release/mergecraft
           python3 tests/native-projects.py target/release/mergecraft
           python3 tests/native-branch-cleanup.py target/release/mergecraft
+          python3 tests/native-checked-workflows.py target/release/mergecraft
       - uses: actions/upload-artifact@v4
         with:
           name: mergecraft-linux-deb

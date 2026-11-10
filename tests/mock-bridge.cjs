@@ -44,7 +44,7 @@ module.exports = function mockBridge() {
         }
         if(cmd==='checkout_branch'){state.current=args.track||args.update_from_remote?args.local_name:args.name;return ok;}
         if(cmd==='create_branch'){state.created.push(args.name);state.current=args.name;return ok;}
-        if(cmd==='merge_branch'){state.merging=true;return mockInvoke(cmd,args);}
+        if(cmd==='merge_branch'||cmd==='merge_checked'){state.merging=true;return mockInvoke('merge_branch',args);}
         if(cmd==='save_conflict'){if(args.mark_resolved)state.resolved.push(args.path);return ok;}
         if(cmd==='resolve_with_side'){state.resolved.push(args.path);return ok;}
         if(cmd==='merge_abort'&&window.testAbortFailure)return {...ok,ok:false,code:1,stderr:'test abort failure'};

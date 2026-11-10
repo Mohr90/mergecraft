@@ -443,7 +443,10 @@ fn theirs_label_of(g: &Git) -> String {
 /// Alles, was der Merge-Editor für eine Konfliktdatei braucht.
 pub fn merge_context(g: &Git, path: &str) -> Result<ConflictData, String> {
     let snap = g.snapshot()?;
-    let theirs_label = theirs_label_of(g);
+    let theirs_label = if snap.reverting {
+        let hash = g.run(["rev-parse", "--short", "REVERT_HEAD"]).unwrap_or_default();
+        format!("Revert {} · parent", hash.trim())
+    } else { theirs_label_of(g) };
     let ours_label = snap
         .head_branch
         .clone()
@@ -1160,4 +1163,48 @@ pub fn open_path(path: String) -> Result<(), String> {
         .spawn()
         .map(|_| ())
         .map_err(|e| e.to_string())
+}
+
+// v1.4.0 checked workflows. Analysis and Git hooks run away from the UI thread.
+static PREVIEW_CANCELLED: AtomicBool = AtomicBool::new(false);
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn merge_preview(state: State<'_, AppState>, name: String) -> Result<MergePreview, String> {
+    let g = git_of(&state)?;
+    PREVIEW_CANCELLED.store(false, Ordering::SeqCst);
+    tauri::async_runtime::spawn_blocking(move || g.merge_preview(&name, &PREVIEW_CANCELLED)).await.map_err(|e|e.to_string())?
+}
+#[tauri::command]
+pub fn cancel_merge_preview() { PREVIEW_CANCELLED.store(true, Ordering::SeqCst); }
+#[tauri::command(rename_all = "snake_case")]
+pub async fn merge_checked(state: State<'_, AppState>, preview: MergePreview, no_ff: bool) -> Result<MergeOutcome, String> {
+    let g = git_of(&state)?;
+    tauri::async_runtime::spawn_blocking(move || g.merge_checked(&preview, no_ff)).await.map_err(|e|e.to_string())?
+}
+#[tauri::command(rename_all = "snake_case")]
+pub async fn hunk_set(state: State<'_, AppState>, path: String, area: String) -> Result<HunkSet, String> {
+    let g = git_of(&state)?;
+    tauri::async_runtime::spawn_blocking(move || g.hunk_set(&path, &area)).await.map_err(|e|e.to_string())?
+}
+#[tauri::command(rename_all = "snake_case")]
+pub async fn apply_hunk(state: State<'_, AppState>, path: String, area: String, index: usize, token: String) -> Result<CommandResult, String> {
+    let g = git_of(&state)?;
+    tauri::async_runtime::spawn_blocking(move || g.apply_hunk(&path, &area, index, &token)).await.map_err(|e|e.to_string())?
+}
+#[tauri::command(rename_all = "snake_case")]
+pub async fn revert_preview(state: State<'_, AppState>, revision: String) -> Result<RevertPreview, String> {
+    let g = git_of(&state)?;
+    tauri::async_runtime::spawn_blocking(move || g.revert_preview(&revision)).await.map_err(|e|e.to_string())?
+}
+#[tauri::command(rename_all = "snake_case")]
+pub async fn revert_checked(state: State<'_, AppState>, revision: String, token: String) -> Result<MergeOutcome, String> {
+    let g = git_of(&state)?;
+    tauri::async_runtime::spawn_blocking(move || g.revert_checked(&revision, &token)).await.map_err(|e|e.to_string())?
+}
+#[tauri::command(rename_all = "snake_case")]
+pub fn workflow_token(state: State<AppState>) -> Result<String, String> {git_of(&state)?.workflow_token()}
+#[tauri::command(rename_all = "snake_case")]
+pub async fn revert_control(state: State<'_, AppState>, abort: bool, expected: String) -> Result<CommandResult, String> {
+    let g = git_of(&state)?;
+    tauri::async_runtime::spawn_blocking(move || g.revert_control(abort, &expected)).await.map_err(|e|e.to_string())?
 }

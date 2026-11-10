@@ -109,6 +109,7 @@ pub struct RepoSnapshot {
     pub merging: bool,
     pub rebasing: bool,
     pub cherry_picking: bool,
+    pub reverting: bool,
     pub merge_head: Option<String>,
     pub remote_url: Option<String>,
     pub remote_name: Option<String>,
@@ -192,4 +193,35 @@ pub struct MergeOutcome {
     pub stderr: String,
     /// true, wenn der Merge einen Commit erzeugt hat (bereits abgeschlossen)
     pub completed: bool,
+}
+
+/// Immutable preview identity is rechecked immediately before a mutation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MergePreview {
+    pub source: String,
+    pub target: String,
+    pub source_oid: String,
+    pub tree_oid: String,
+    pub target_oid: String,
+    pub token: String,
+    pub kind: String,
+    pub incoming: usize,
+    pub files: Vec<FileChange>,
+    pub conflicts: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HunkSet {
+    pub token: String,
+    pub patches: Vec<String>,
+    pub blocks: Vec<crate::merge::Block>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RevertPreview {
+    pub commit: CommitInfo,
+    pub target: String,
+    pub token: String,
+    pub files: Vec<FileChange>,
 }

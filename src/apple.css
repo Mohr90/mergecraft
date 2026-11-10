@@ -711,3 +711,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .conflict-values dd,.result-origins code { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font-family:monospace }
 .result-origins > div { display:grid; grid-template-columns:minmax(4em,25%) 1fr; gap:.6em; padding:.2em }
 .workspace-analysis { flex-wrap:wrap }
+
+/* Focused previews reuse the workspace's opaque semantic surfaces and type scale. */
+dialog.workflow-preview { width: min(780px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 40px); padding: 24px; }
+.workflow-preview .workflow-content { max-height: calc(100vh - 230px); overflow: auto; min-height: 90px; }
+.workflow-direction { display: flex; gap: 12px; align-items: center; font-size: 17px; overflow-wrap: anywhere; margin: 16px 0; }
+.workflow-summary { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 14px; border-radius: 10px; background: var(--bg-2); }
+.workflow-summary span { color: var(--fg-2); }
+.workflow-files { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-top: 16px; }
+.workflow-files:empty { display: none; }
+.workflow-file { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; text-align: left; border: 0; border-bottom: 1px solid var(--line-soft); background: var(--bg); color: var(--fg); font: inherit; cursor: pointer; }
+.workflow-file:hover { background: var(--bg-2); }
+.workflow-file .mono { flex: 1; overflow-wrap: anywhere; min-width: 0; }
+.workflow-diff:not(:empty) { height: 350px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-top: 16px; }
+.hunk-action { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 12px; background: var(--bg-2); border-block: 1px solid var(--line); color: var(--fg-2); font: 12px system-ui, sans-serif; }
+.hunk-action .btn { min-height: 28px; flex-shrink: 0; }
+.hunk-note { padding: 8px 12px; margin: 0; }
+@media(max-width:600px) { .workflow-preview .workflow-content { max-height: calc(100vh - 260px); } .workflow-preview .actions { flex-wrap: wrap; } .workflow-file .chip { display: none; } }
