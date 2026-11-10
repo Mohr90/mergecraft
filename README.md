@@ -52,7 +52,24 @@ Syntax colors in diffs and merge panes make keywords, strings, comments, numbers
 
 </details>
 
-See the [versioned roadmap](docs/roadmap.md) for the v1.3.0 outgoing-commit and branch-history workflow.
+## Preview merges and make focused commits
+
+Before a merge, inspect the direction, incoming commit count, resulting file changes and conflict paths. The preview uses Git's three-way `merge-tree` analysis without changing HEAD, the index or working files. It uses local refs; Fetch is explicit. Starting the merge rechecks the displayed state. Git 2.38 or newer is required for merge previews. A clean textual merge is not a guarantee of logically correct code.
+
+In **Changes**, use **Stage hunk** or **Unstage hunk** directly above a text change block. Partially staged files show a mixed checkbox; staged and remaining changes stay separately inspectable. Whole-file actions remain available for binary files, renames, untracked files and unsupported changes.
+
+In **History**, **Revert commit** previews the reverse of an ordinary commit and creates a new reversing commit on the current branch. Published history stays intact. Conflicts use the existing editor with **Finish revert** and **Abort revert**; Push stays a separate action. Merge/root commits are excluded from this first version. Later changes can make the actual revert differ from its reverse-diff preview.
+
+<details>
+<summary>See merge preview, hunk staging and commit revert (synthetic demo)</summary>
+
+![Merge preview before starting a merge](docs/screenshots/mergecraft-v140-merge-preview.png)
+![Stage individual text hunks directly in the diff](docs/screenshots/mergecraft-v140-hunks.png)
+![Review an ordinary commit before creating a reversing commit](docs/screenshots/mergecraft-v140-revert.png)
+
+</details>
+
+See the [versioned roadmap](docs/roadmap.md) and [workflow guide](docs/checked-workflows.md).
 
 ## German or English
 

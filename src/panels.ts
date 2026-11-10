@@ -39,6 +39,8 @@ export interface PanelCtx {
   merge(b: BranchInfo): void;
   compare(b: BranchInfo): void;
   mergeAbort(): void;
+  revertCommit?(commit:CommitInfo): void;
+  revertControl?(abort:boolean): void;
   mergeContinue(): void;
   push?(): void;
   mergeError?:string;
@@ -88,7 +90,7 @@ function fileRow(
           ? h`<span class="chip">aus ${esc(entry.orig_path)}</span>`
           : ""
       }
-      ${entry.partial ? h`<span class="partial-stage" title="Ein Teil dieser Datei ist vorgemerkt. Weitere Änderungen stehen unter „Noch nicht vorgemerkt“.">Weitere Änderungen</span>` : ""}
+      ${entry.partial ? h`<span class="partial-stage" title="Ein Teil dieser Datei ist vorgemerkt. Weitere Änderungen stehen unter „Noch nicht vorgemerkt“.">Teilweise vorgemerkt</span>` : ""}
       <span class="actions">
         ${actions
           .filter(a => !["diff","stage","unstage"].includes(a.act))
@@ -110,11 +112,12 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
     return wrap;
   }
   const snap = ctx.snapshot?.();
-  const blocked = !!(st.merging || st.conflicts.length || snap?.rebasing || snap?.cherry_picking);
+  const blocked = !!(st.merging || st.conflicts.length || snap?.rebasing || snap?.cherry_picking || snap?.reverting);
   const tracked = st.staged.length + st.changed.length;
   wrap.insertAdjacentHTML("beforeend", h`<header class="page-heading"><div><h1>Änderungen</h1><p class="muted">Prüfe deine Änderungen und bereite den nächsten Commit vor.</p></div>
     <div class="changes-actions"><button class="btn" data-top-act="rollback" ${blocked || !tracked || !snap?.head ? "disabled" : ""}>${icon("undo",14)} Rollback …</button></div></header>`);
   if(ctx.mergeError)wrap.insertAdjacentHTML('beforeend',`<p class="merge-inline-error" role="alert">${esc(ctx.mergeError)}</p>`);
+  if(snap?.reverting)wrap.insertAdjacentHTML('beforeend',h`<div class="banner warn"><div><b>Revert läuft</b><p>${st.conflicts.length?t('Löse zuerst alle Konfliktdateien.'):t('Ergebnis prüfen und Revert abschließen. Danach kannst du pushen.')}</p></div><span class="right row-actions-gap"><button class="btn" data-top-act="revert-abort">Revert abbrechen</button><button class="btn primary" data-top-act="revert-continue" ${st.conflicts.length?'disabled':''}>Revert abschließen</button></span></div>`);
   const mergingBanner = st.merging
     ? h`<div class="banner error">${icon("merge", 15)}
         <b>Merge noch nicht abgeschlossen.</b> ${st.conflicts.length ? m`${st.conflicts.length} Datei(en) mit Konflikten. Löse diese zuerst.` : t("Alle Konflikte sind gelöst. „Merge abschließen“ erstellt den Merge-Commit. Danach kannst du pushen.")}
@@ -163,7 +166,7 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
     .join("");
   const changedRows = st.changed
     .map((e) =>
-      fileRow(e, [
+      fileRow({...e,partial:st.staged.some(file=>file.path===e.path)}, [
         { act: "diff", label: "Diff", title: t("Änderungen ansehen") },
         { act: "stage", label: t("Vormerken"), title: t("Zum Commit vormerken") },
         { act: "rollback", label: "Rollback", title: t("Auf den letzten Commit zurücksetzen"), danger: true, disabled: blocked },
@@ -207,6 +210,10 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
 
   const summary=wrap.querySelector(".staging-summary");
   if(summary) list.prepend(summary);
+  wrap.querySelectorAll<HTMLInputElement>('[data-stage-file]').forEach(input=>{
+    const path=input.closest<HTMLElement>('.row')?.dataset.path;
+    if(st.staged.some(f=>f.path===path)&&st.changed.some(f=>f.path===path)){input.indeterminate=true;input.setAttribute('aria-checked','mixed');}
+  });
   wrap.addEventListener("change",event=>{
     const input=event.target as HTMLInputElement;
     if(!input.matches('input[data-stage-file],input[data-stage-all]')) return;
@@ -217,7 +224,7 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
       paths=unstage ? st.staged.map(file=>file.path) : pending;
     } else {
       const row=input.closest<HTMLElement>(".row")!;
-      paths=[row.dataset.path!];unstage=input.dataset.stageFile==="staged";
+      paths=[row.dataset.path!];unstage=!input.checked;
     }
     if(!paths.length) return;
     wrap.querySelectorAll<HTMLInputElement>('input[data-stage-file],input[data-stage-all]').forEach(control=>control.disabled=true);
@@ -288,6 +295,8 @@ export function renderChanges(ctx: PanelCtx): HTMLElement {
     const top = (target.closest("[data-top-act]") as HTMLElement | null)?.dataset.topAct;
     if (!top) return;
     switch (top) {
+      case "revert-abort": return ctx.revertControl?.(true);
+      case "revert-continue": return ctx.revertControl?.(false);
       case "rollback": return ctx.rollback();
       case "stage-changed":
         return ctx.stage(st.changed.map((x) => x.path));
@@ -357,7 +366,7 @@ export function renderBranches(ctx: PanelCtx, state: BranchViewState = {query: "
   const all = ctx.branches();
   const target = ctx.snapshot()?.head_branch ?? "detached HEAD";
   const allowMerge=canMergeInto(ctx.snapshot()?.head_branch);
-  const merging = !!(ctx.snapshot()?.merging || ctx.snapshot()?.rebasing || ctx.snapshot()?.cherry_picking);
+  const merging = !!(ctx.snapshot()?.merging || ctx.snapshot()?.rebasing || ctx.snapshot()?.cherry_picking || ctx.snapshot()?.reverting);
   wrap.innerHTML = h`
     <div class="branch-toolbar"><header class="page-heading"><div><h1>Branches</h1>
       <p class="muted">Branches durchsuchen, wechseln und vergleichen.</p></div>
@@ -479,6 +488,7 @@ export function renderHistory(ctx: PanelCtx): HTMLElement {
                  <div class="meta">${esc(sel.hash.slice(0, 12))} · ${esc(sel.author)} · ${esc(
                    absTime(sel.timestamp),
                  )}</div>
+                 <button class="btn" data-revert-commit ${sel.parents.length!==1?'disabled':''} title="${esc(sel.parents.length===1?t('Erstellt einen Gegen-Commit im aktuellen Branch'):t('Nur normale Commits mit einem Vorgänger können hier zurückgenommen werden.'))}">${icon('undo',14)} ${t('Commit zurücknehmen')}</button>
                </div>`
             : h`<div class="empty">${icon("history", 22)}<b>Commit auswählen</b><div class="small">um die geänderten Dateien zu sehen</div></div>`
         }
@@ -502,6 +512,7 @@ export function renderHistory(ctx: PanelCtx): HTMLElement {
     </div>`;
   wrap.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
+    if(target.closest("[data-revert-commit]")&&sel)return ctx.revertCommit?.(sel);
     const row = target.closest(".commit-row") as HTMLElement | null;
     if (row?.dataset.hash) return ctx.selectCommit(row.dataset.hash);
     const fileDiff = (target.closest("[data-file-act]") as HTMLElement | null)?.dataset.fileAct;

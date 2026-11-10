@@ -44,7 +44,7 @@ impl Git {
         ))
     }
 
-    fn base_command(&self) -> Command {
+    pub(crate) fn base_command(&self) -> Command {
         let mut c = Command::new("git");
         c.current_dir(&self.root)
             .env("GIT_TERMINAL_PROMPT", "0")
@@ -183,7 +183,7 @@ impl Git {
         self.valid_branch(remote)?;
         self.valid_branch(local)?;
         let snapshot = self.snapshot()?;
-        if snapshot.merging || snapshot.rebasing || snapshot.cherry_picking {
+        if snapshot.merging || snapshot.rebasing || snapshot.cherry_picking || snapshot.reverting {
             return Err("Schließe zuerst den laufenden Git-Vorgang ab.".into());
         }
         if !self.status()?.all.is_empty() {
@@ -240,7 +240,7 @@ impl Git {
     ) -> Result<CommandResult, String> {
         self.valid_branch(name)?;
         let snapshot = self.snapshot()?;
-        if snapshot.merging || snapshot.rebasing || snapshot.cherry_picking {
+        if snapshot.merging || snapshot.rebasing || snapshot.cherry_picking || snapshot.reverting {
             return Err("Schließe zuerst den laufenden Git-Vorgang ab.".into());
         }
         if snapshot.head_branch.as_deref() == Some(name) {
@@ -339,9 +339,9 @@ impl Git {
             head,
             head_branch,
             merging: self.root.join(".git/MERGE_HEAD").exists() || merge_head.is_some(),
-            rebasing: self.root.join(".git/rebase-merge").exists()
-                || self.root.join(".git/rebase-apply").exists(),
-            cherry_picking: self.root.join(".git/CHERRY_PICK_HEAD").exists(),
+            rebasing: self.git_path_exists("rebase-merge") || self.git_path_exists("rebase-apply"),
+            cherry_picking: self.git_path_exists("CHERRY_PICK_HEAD"),
+            reverting: self.git_path_exists("REVERT_HEAD"),
             merge_head,
             remote_url,
             remote_name,
@@ -758,7 +758,7 @@ impl Git {
     /// Inhalt einer Stage (":1:Pfad" = Basis, ":2:" = lokal, ":3:" = eingehend)
     /// oder einer Revision ("REV:Pfad").
     pub fn blob(&self, spec: &str) -> Option<(String, bool)> {
-        let output = self.base_command().args(["show", spec]).output().ok()?;
+        let output = self.base_command().args(["cat-file", "blob", spec]).output().ok()?;
         if !output.status.success() {
             return None;
         }
@@ -788,7 +788,7 @@ impl Git {
         track_same_name: bool,
     ) -> Result<(), String> {
         let snapshot = self.snapshot()?;
-        if snapshot.merging || snapshot.rebasing || snapshot.cherry_picking {
+        if snapshot.merging || snapshot.rebasing || snapshot.cherry_picking || snapshot.reverting {
             return Err("Schließe zuerst den laufenden Git-Vorgang ab.".into());
         }
         let branch = snapshot

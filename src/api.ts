@@ -40,6 +40,7 @@ export interface RepoSnapshot {
   merging: boolean;
   rebasing: boolean;
   cherry_picking: boolean;
+  reverting?: boolean;
   merge_head: string | null;
   remote_url: string | null;
   remote_name: string | null;
@@ -217,6 +218,14 @@ export interface MergeOutcome {
 
 // --------------------------------------------------------------- Befehle
 
+export interface MergePreview {
+  source: string; target: string; source_oid: string; tree_oid: string; target_oid: string; token: string;
+  kind: "up_to_date" | "fast_forward" | "clean" | "conflicts";
+  incoming: number; files: FileChange[]; conflicts: string[];
+}
+export interface HunkSet {token: string; patches: string[]; blocks: FileDiff["blocks"]; reason: string | null;}
+export interface RevertPreview {commit: CommitInfo; target: string; token: string; files: FileChange[];}
+
 export const api = {
   inTauri,
   checkForUpdates: () => call<import("./updates").UpdateInfo>("check_for_updates"),
@@ -295,6 +304,15 @@ export const api = {
     call<CommandResult>("rename_branch", { name, new_name: newName }),
   mergeBranch: (name: string, noFf = true, squash = false, message: string | null = null) =>
     call<MergeOutcome>("merge_branch", { name, no_ff: noFf, squash, message }),
+  mergePreview: (name: string) => call<MergePreview>("merge_preview", {name}),
+  cancelMergePreview: () => call<void>("cancel_merge_preview"),
+  mergeChecked: (preview: MergePreview, noFf: boolean) => call<MergeOutcome>("merge_checked", {preview, no_ff:noFf}),
+  hunkSet: (path: string, area: ChangeArea) => call<HunkSet>("hunk_set", {path, area}),
+  applyHunk: (path: string, area: ChangeArea, index: number, token: string) => call<CommandResult>("apply_hunk", {path, area, index, token}),
+  revertPreview: (revision: string) => call<RevertPreview>("revert_preview", {revision}),
+  revertChecked: (revision: string, token: string) => call<MergeOutcome>("revert_checked", {revision, token}),
+  workflowToken: () => call<string>("workflow_token"),
+  revertControl: (abort: boolean, expected: string) => call<CommandResult>("revert_control", {abort, expected}),
   mergeAbort: () => call<CommandResult>("merge_abort", {}),
   mergeContinue: (message: string | null = null) =>
     call<CommandResult>("merge_continue", { message }),

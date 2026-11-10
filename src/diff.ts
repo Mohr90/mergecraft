@@ -2,7 +2,7 @@ import { t, h, m, localizeText } from "./i18n";
 // Diff-Ansicht: nebeneinander oder vereint, mit Zeilennummern und
 // wortweiser Hervorhebung (wie im WebStorm-Diff).
 
-import type { FileDiff, Highlights } from "./api";
+import type { FileDiff, Highlights, HunkSet } from "./api";
 import { el, esc, icon } from "./ui";
 import { SyntaxDocument } from "./syntax";
 import { baseName, dirName } from "./merge";
@@ -43,6 +43,7 @@ export class DiffView {
   mode: DiffMode = "split";
   private diff!: FileDiff;
   private builtinLabels=false;
+  private hunks: {set:HunkSet; area:string; apply:(index:number)=>Promise<void>} | null = null;
   private syntaxA!:SyntaxDocument;
   private syntaxB!:SyntaxDocument;
   private renderA:string[]=[];
@@ -52,11 +53,18 @@ export class DiffView {
 
   set(diff: FileDiff, mode: DiffMode = "split", builtinLabels=false) {
     this.diff = diff;
+    this.hunks = null;
     this.syntaxA=new SyntaxDocument(diff.path,diff.a_text);
     this.syntaxB=new SyntaxDocument(diff.path,diff.b_text);
     this.builtinLabels=builtinLabels;
     this.mode = mode;
     if (this.root) this.render();
+  }
+
+  setHunks(set:HunkSet, area:string, apply:(index:number)=>Promise<void>) {
+    this.hunks={set,area,apply};
+    if(set.blocks.length)this.diff={...this.diff,blocks:set.blocks};
+    if(this.root)this.render();
   }
 
   mount(target: HTMLElement) {
@@ -127,10 +135,24 @@ export class DiffView {
       return;
     }
 
+    if(this.hunks?.set.reason)wrap.appendChild(el('p','hunk-note small muted',esc(localizeText(this.hunks.set.reason))));
     const body = el("div", "diff-body");
     let drawn = 0;
     for (const seg of segs) {
       if (drawn > LIMIT) break;
+      if(seg.type==='change' && this.hunks && !this.hunks.set.reason) {
+        const index=this.diff.blocks.findIndex(b=>b.a_start===seg.a[0]&&b.b_start===seg.b[0]);
+        if(index>=0) {
+          const strip=el('div','hunk-action');
+          strip.innerHTML=`<span>${esc(m`Block ${index+1} · Zeile ${seg.b[0]+1}`)}</span><button class="btn" data-hunk="${index}">${icon(this.hunks.area==='staged'?'undo':'check',14)} ${this.hunks.area==='staged'?t('Block herausnehmen'):t('Block vormerken')}</button>`;
+          strip.querySelector('button')!.addEventListener('click',async()=>{
+            const scroll=body.scrollTop;
+            wrap.querySelectorAll<HTMLButtonElement>('[data-hunk]').forEach(b=>b.disabled=true);
+            try{await this.hunks!.apply(index);}finally{if(this.root){const next=this.root.querySelector('.diff-body');if(next)next.scrollTop=scroll;}wrap.querySelectorAll<HTMLButtonElement>('[data-hunk]').forEach(b=>b.disabled=false);}
+          });
+          body.appendChild(strip);
+        }
+      }
       const row = el("div", "dseg");
       if (this.mode === "split") {
         if (seg.type === "change") {

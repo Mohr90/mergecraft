@@ -309,7 +309,7 @@ export async function mockInvoke(cmd: string, args?: any): Promise<any> {
     case "versions_diff":
     case "commit_file_diff":
     case "compare_diff":
-      return fileDiff(args.path);
+      return {...fileDiff(args.path),...(args.label_a?{a_label:args.label_a}:{}),...(args.label_b?{b_label:args.label_b}:{})};
     case "conflict_data": {
       const data: ConflictData = {
         path: args.path,
@@ -337,6 +337,17 @@ export async function mockInvoke(cmd: string, args?: any): Promise<any> {
       return null;
     case "pick_folder":
       return "/home/demo/projects";
+    case "merge_preview":
+      return {source:args.name,target:"feature/refactor",source_oid:"b".repeat(40),target_oid:"a".repeat(40),tree_oid:"c".repeat(40),token:"demo",kind:"conflicts",incoming:3,files:[{status:"M",path:"src/main.rs"}],conflicts:["src/main.rs"]};
+    case "hunk_set": {
+      const diff=fileDiff(args.path);
+      return {token:"demo",patches:diff.blocks.map(()=>"demo"),blocks:diff.blocks,reason:args.area==='untracked'?"Für diese Änderung nur ganze Dateien vormerken.":null};
+    }
+    case "revert_preview":
+      return {commit:history().find(c=>c.hash===args.revision)??history()[0],target:"feature/refactor",token:"demo",files:[{status:"M",path:"src/main.rs"}]};
+    case "revert_checked":
+      return {ok:true,completed:true,conflicts:[],stdout:"Revert created",stderr:""};
+    case "merge_checked":
     case "merge_branch":
       return {
         ok: false,

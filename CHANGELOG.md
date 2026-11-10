@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0 — 2026-11-10
+
+- Preview merges with real Git three-way analysis, incoming commit/file counts, conflict paths and result diffs before changing the working copy. Cancel background analysis and recheck stale previews before merging.
+- Stage and unstage individual text hunks directly in split/unified diffs, with partial-file indicators and checks against external edits.
+- Revert an ordinary commit from history while preserving published history. Review reverse diffs, resolve conflicts in the existing editor, continue or abort, then push explicitly.
+- Extend operation guards and status indicators to reverts and linked worktrees. All new workflows support German/English and both appearances.
+
 ## 1.3.0 — 2026-11-09
 
 - Refresh local repository status when Mergecraft regains focus, including commits made or pushed in another editor.

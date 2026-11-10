@@ -14,6 +14,7 @@ export interface MergeHost {
   onError: (message: string) => void;
   onClose: () => void;
   canAbort?: () => boolean;
+  isRevert?: () => boolean;
   onAbort?: () => Promise<void>;
   takeSide?: (side: "ours" | "theirs") => Promise<void>;
   readConflict?: (path:string)=>Promise<ConflictData>;
@@ -516,7 +517,7 @@ export class MergeEditor {
         <button class="icon-btn" data-act="undo" title="Rückgängig (Strg+Z)" aria-label="Rückgängig">${icon("undo",15)}</button>
         <button class="icon-btn" data-act="redo" title="Wiederholen (Strg+Umschalt+Z)" aria-label="Wiederholen"><span style="transform:scaleX(-1)">${icon("undo",15)}</span></button>
         <button class="btn ghost" data-act="reset-preview" title="Nur die Vorschau dieser Datei zurücksetzen">Auswahl zurücksetzen</button>
-        ${this.host.canAbort?.() ? h`<button class="btn danger" data-act="abort-merge">Merge abbrechen</button>` : ""}
+        ${this.host.canAbort?.() ? h`<button class="btn danger" data-act="abort-merge">${this.host.isRevert?.()?t("Revert abbrechen"):t("Merge abbrechen")}</button>` : ""}
         <button class="btn" data-act="auto-resolve" title="Getrennte Änderungen über mehrere Bereiche kombinieren. Überschneidungen bleiben offen. Ergebnis bitte prüfen.">Auto Resolve</button>
         <button class="btn ghost" data-act="accept-ours-all" title="Nur noch offene Konflikte von links übernehmen; vorhandene Entscheidungen bleiben erhalten.">Offene von links</button>
         <button class="btn ghost" data-act="accept-theirs-all" title="Nur noch offene Konflikte von rechts übernehmen; vorhandene Entscheidungen bleiben erhalten.">Offene von rechts</button>
@@ -526,7 +527,7 @@ export class MergeEditor {
     wrap.appendChild(head);
     const direction=el('div','merge-direction');
     direction.innerHTML=`<b>${esc(d.theirs_label)} → ${esc(d.ours_label)}</b>`;
-    direction.insertAdjacentHTML('beforeend',h`<span class="merge-steps">Konflikte lösen → Merge abschließen → Pushen</span>`);
+    direction.insertAdjacentHTML('beforeend',`<span class="merge-steps">${this.host.isRevert?.()?t('Konflikte lösen → Revert abschließen → Pushen'):t('Konflikte lösen → Merge abschließen → Pushen')}</span>`);
     wrap.appendChild(direction);
     wrap.style.setProperty('--merge-result-width',`${this.resultWidth}%`);
     const width=el('label','merge-width',h`Ergebnisbreite <input type="range" min="30" max="60" step="1" value="${this.resultWidth}" aria-label="Ergebnisbreite">`);
@@ -590,7 +591,7 @@ export class MergeEditor {
       <div class="ph"><span class="dot ours"></span><b>Aktueller Branch</b><span class="ref">${esc(d.ours_label)}</span>
         <span class="fname mono">${esc(baseName(d.path))}</span></div>
       <div class="ph"><span class="dot result"></span><b>Ergebnis</b><span class="sub">Entwurf</span></div>
-      <div class="ph"><span class="dot theirs"></span><b>Eingehender Branch</b><span class="ref">${esc(d.theirs_label)}</span>
+      <div class="ph"><span class="dot theirs"></span><b>${this.host.isRevert?.()?t("Stand vor dem Commit"):t("Eingehender Branch")}</b><span class="ref">${esc(d.theirs_label)}</span>
         <span class="fname mono">${esc(baseName(d.path))}</span></div>`;
     panes.appendChild(heads);
 
