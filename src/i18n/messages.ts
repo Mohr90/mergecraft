@@ -668,6 +668,9 @@ export const en = {
   "Kein laufender Revert.": "No revert is in progress.",
   "Eingehende Commits: {{0}} · Dateien: {{1}} · Konfliktdateien: {{2}}": "Incoming commits: {{0}} · Files: {{1}} · Conflict files: {{2}}",
   "Betroffene Dateien: {{0}}": "Affected files: {{0}}",
-  "Die markierten Dateien brauchen nach dem Start deine Entscheidung.": "The marked files will need your decision after starting the merge."
+  "Die markierten Dateien brauchen nach dem Start deine Entscheidung.": "The marked files will need your decision after starting the merge.",
+  "Eine externe Revert-Serie läuft. Setze sie mit git revert --continue fort oder brich sie hier ab.": "An external revert sequence is in progress. Continue it with git revert --continue, or abort it here.",
+  "Erreichbarkeit wird geprüft …": "Checking commit reachability …",
+  "Bitte aktualisieren und erneut prüfen.": "Please refresh and check again."
 } as const;
 export type MessageKey = keyof typeof en;

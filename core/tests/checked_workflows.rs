@@ -315,3 +315,27 @@ fn empty_revert_remains_abortable_and_external_edits_block_continue() {
     assert_eq!(before, r.head());
     assert!(!r.g.snapshot().unwrap().reverting);
 }
+
+#[test]
+fn external_revert_series_is_not_silently_truncated() {
+    let r = Repo::new();
+    r.write("file.txt", "first\n");
+    r.commit("first");
+    let first = r.head();
+    r.write("file.txt", "later\n");
+    r.commit("later");
+    let later = r.head();
+    assert_ne!(r.g.raw(["revert", "--no-edit", &first, &later]).code, 0);
+    assert!(r.g.git_path_exists("sequencer"));
+    r.write("file.txt", "resolved\n");
+    r.g.run(["add", "file.txt"]).unwrap();
+    let token = r.g.workflow_token().unwrap();
+    assert!(r
+        .g
+        .revert_control(false, &token)
+        .unwrap_err()
+        .contains("Revert-Serie"));
+    assert!(r.g.git_path_exists("sequencer"));
+    assert!(r.g.revert_control(true, &token).unwrap().ok);
+    assert_eq!(r.head(), later);
+}

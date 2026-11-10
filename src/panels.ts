@@ -20,6 +20,8 @@ export interface PanelCtx {
   branches(): BranchInfo[];
   history(): CommitInfo[];
   selectedCommit(): string | null;
+  revertEligible?:boolean;
+  revertEligibilityHint?:string;
   commitFiles(): FileChange[];
   logLines(): string[];
   openMerge(path: string): void;
@@ -488,7 +490,7 @@ export function renderHistory(ctx: PanelCtx): HTMLElement {
                  <div class="meta">${esc(sel.hash.slice(0, 12))} · ${esc(sel.author)} · ${esc(
                    absTime(sel.timestamp),
                  )}</div>
-                 <button class="btn" data-revert-commit ${sel.parents.length!==1?'disabled':''} title="${esc(sel.parents.length===1?t('Erstellt einen Gegen-Commit im aktuellen Branch'):t('Nur normale Commits mit einem Vorgänger können hier zurückgenommen werden.'))}">${icon('undo',14)} ${t('Commit zurücknehmen')}</button>
+                 <button class="btn" data-revert-commit ${sel.parents.length!==1||ctx.revertEligible===false?'disabled':''} title="${esc(sel.parents.length===1?(ctx.revertEligibilityHint||t('Erstellt einen Gegen-Commit im aktuellen Branch')):t('Nur normale Commits mit einem Vorgänger können hier zurückgenommen werden.'))}">${icon('undo',14)} ${t('Commit zurücknehmen')}</button>
                </div>`
             : h`<div class="empty">${icon("history", 22)}<b>Commit auswählen</b><div class="small">um die geänderten Dateien zu sehen</div></div>`
         }

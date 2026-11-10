@@ -53,6 +53,8 @@ class App implements PanelCtx {
   historyPath: string | null = null;
   historyBranch: string | null = null;
   historyOutgoing = false;
+  revertEligible = false;
+  revertEligibilityHint = "";
   private lastFocusRefresh = 0;
   private previewSelection: {path:string;area:"staged"|"work"|"untracked"} | null = null;
   private previewRequest = 0;
@@ -1389,6 +1391,15 @@ class App implements PanelCtx {
     const request = ++this.commitRequest;
     const root = this.snap?.root;
     this.selected = hash;
+    this.revertEligible=false;
+    this.revertEligibilityHint=t("Erreichbarkeit wird geprüft …");
+    const head=this.snap?.head;
+    if(head)void api.gitRaw(["merge-base","--is-ancestor",hash,head]).then(result=>{
+      if(request!==this.commitRequest||root!==this.snap?.root||head!==this.snap?.head)return;
+      this.revertEligible=result.ok;
+      this.revertEligibilityHint=result.ok?"":t("Der Commit gehört nicht zum aktuellen Branch.");
+      this.render();
+    }).catch(()=>{if(request===this.commitRequest){this.revertEligibilityHint=t("Bitte aktualisieren und erneut prüfen.");this.render();}});
     this.selectedFiles = [];
     this.render();
     void api.commitFiles(hash).then(files => {

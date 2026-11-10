@@ -467,11 +467,11 @@ impl Git {
         if abort {
             return Ok(self.run_result(["revert", "--abort"]));
         }
+        if self.git_path_exists("sequencer") {
+            return Err("Eine externe Revert-Serie läuft. Setze sie mit git revert --continue fort oder brich sie hier ab.".into());
+        }
         // Explicit commit keeps hooks enabled, also after conflict resolution.
         let result = self.run_result(["commit", "--no-edit"]);
-        if result.ok && self.git_path_exists("sequencer") {
-            self.run(["revert", "--quit"])?;
-        }
         Ok(result)
     }
 }
