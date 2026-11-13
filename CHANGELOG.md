@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.1 — 2026-11-13
 
 - Fetch before Pull and offer an explicit history-preserving merge for divergent branches, without changing Git pull configuration. Route conflicts to the merge editor and rejected non-fast-forward pushes to an explicit Pull action.
 
