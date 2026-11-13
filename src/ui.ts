@@ -150,6 +150,7 @@ interface ModalButton<T> {
   label: string;
   value: T;
   primary?: boolean;
+  danger?: boolean;
 }
 
 export function showDialog(content: string): { dialog: HTMLDialogElement; close: () => void } | null {
@@ -166,7 +167,7 @@ export function modal<T>(title: string, detail: string, buttons: ModalButton<T>[
   return new Promise(resolve => {
     const view = showDialog(`<h2 id="dialog-title">${esc(title)}</h2>
       ${detail ? `<p class="detail">${esc(detail)}</p>` : ""}
-      <div class="actions">${buttons.map((b,i)=>`<button class="btn ${b.primary ? "primary" : ""}" data-i="${i}">${esc(b.label)}</button>`).join("")}</div>`);
+      <div class="actions">${buttons.map((b,i)=>`<button class="btn ${b.primary ? "primary" : ""}${b.danger ? " danger" : ""}" data-i="${i}">${esc(b.label)}</button>`).join("")}</div>`);
     if (!view) return resolve(null);
     let done = false;
     const finish = (value: T | null) => { if (done) return; done = true; view.close(); resolve(value); };

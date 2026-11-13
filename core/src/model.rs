@@ -225,3 +225,32 @@ pub struct RevertPreview {
     pub token: String,
     pub files: Vec<FileChange>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorktreeBranchDeletion {
+    pub branch: String,
+    pub path: String,
+    pub branch_oid: String,
+    pub caller_head: String,
+    pub token: String,
+    pub blocked: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PullPlan {
+    pub branch: String,
+    pub upstream: String,
+    pub upstream_oid: String,
+    pub head: String,
+    pub ahead: i32,
+    pub behind: i32,
+    pub token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PullResult {
+    #[serde(flatten)]
+    pub result: CommandResult,
+    pub plan: Option<PullPlan>,
+    pub conflicts: Vec<String>,
+}

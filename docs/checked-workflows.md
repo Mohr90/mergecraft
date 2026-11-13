@@ -19,3 +19,19 @@ In History, select an ordinary single-parent commit reachable from your current 
 Create revert commit prepares the inverse changes and creates a new commit with normal commit hooks. A clean worktree is required. On conflicts or hook failures, the operation stays visible under Changes: resolve files, then Finish revert, or Abort revert to restore the pre-operation state. Empty reverts explain that there is nothing to commit and can be aborted. Nothing is pushed automatically; the outgoing-commit indicator shows the new local commit.
 
 This first version handles one ordinary commit at a time. Merge commits require choosing a mainline and are intentionally not offered. Revert differs from file Rollback: Rollback discards uncommitted tracked-file changes, while Revert records an inverse change as a new commit.
+
+## Remove a branch checked out in a worktree (v1.4.1)
+
+Use the branch's Delete action. If it is checked out in one linked worktree, Mergecraft offers **Remove worktree and branch**, showing the full directory path and any warning about commits unique to that branch. Confirming removes the directory through Git, then deletes the local branch. Remote branches are preserved.
+
+Main/current, locked, missing, busy, submodule and multiple-worktree cases are protected. Tracked modifications, untracked files and even ignored files block deletion; Mergecraft never forces worktree removal. If the repository changes after confirmation, reopen the action. If Git removes the worktree but subsequently refuses branch deletion, the error explicitly says that the branch remains. Bulk cleanup continues to protect checked-out branches.
+
+![Explicit worktree and branch removal confirmation (synthetic demo)](screenshots/mergecraft-worktree-deletion.png)
+
+## Divergent Pull and rejected Push (v1.4.1)
+
+Pull first fetches the tracking remote. If a fast-forward is possible, Git updates the branch while preserving unrelated local changes. If both branches contain unique commits, a dialog shows the counts and offers **Merge remote changes**. Cancel stops after Fetch. Confirmation rechecks the inspected branch, commit IDs and working state, then merges both histories. Git configuration is not changed, and no rebase, force push or automatic stash is used. Conflicts open in the existing merge editor; finish the merge before pushing.
+
+A non-fast-forward Push rejection offers **Start Pull**. It does not automatically retry Push.
+
+![Explicit reconciliation of local and remote commits (synthetic demo)](screenshots/mergecraft-divergent-pull.png)

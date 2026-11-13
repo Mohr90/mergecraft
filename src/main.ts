@@ -1140,6 +1140,15 @@ class App implements PanelCtx {
         if (!ancestry.ok && ancestry.code !== 1) throw new Error(ancestry.stderr || ancestry.stdout);
         force = ancestry.code === 1;
       }
+      const worktree=b.is_remote?null:await api.worktreeBranchPreview(b.full_name);
+      if(worktree) {
+        if(worktree.blocked){await modal(t("Branch ist in einem Worktree geöffnet"),b.name+"\n"+worktree.path+"\n\n"+localizeText(worktree.blocked),[{label:t("Schließen"),value:false}]);return;}
+        const explanation=t("Entfernt das Worktree-Verzeichnis und danach den lokalen Branch. Der Remote-Branch bleibt erhalten.");
+        const own=force?t("Dieser Branch enthält Commits, die nicht im aktuellen Branch enthalten sind. Beim Löschen können diese Commits unerreichbar werden. Vergleiche die Branches, wenn du sie noch benötigst."):"";
+        if(!await modal(t("Worktree und Branch entfernen?"),b.name+"\n"+worktree.path+"\n\n"+explanation+(own?"\n\n"+own:""),[{label:t("Abbrechen"),value:false},{label:t("Worktree und Branch entfernen"),value:true,danger:true}]))return;
+        if(root!==this.snap?.root||this.busy)return;
+        await this.run(t("Worktree und Branch entfernen"),()=>api.removeWorktreeBranch(worktree,force));return;
+      }
       const title = b.is_remote ? m`Remote-Branch „${b.name}“ löschen?` : m`Lokalen Branch „${b.name}“ löschen?`;
       const detail = b.is_remote ? t("Entfernt den Branch auf dem Remote per push --delete.")
         : force ? t("Dieser Branch enthält Commits, die nicht im aktuellen Branch enthalten sind. Beim Löschen können diese Commits unerreichbar werden. Vergleiche die Branches, wenn du sie noch benötigst.")
@@ -1246,7 +1255,17 @@ class App implements PanelCtx {
       trackSameName=await confirmDialog(t("Remote-Branch zuordnen?"), m`„${current.name}“ hat noch keinen Upstream. Soll „${candidates[0].name}“ dauerhaft für Pull und Push zugeordnet und anschließend Pull ausgeführt werden?`, t("Zuordnen und pullen"));
       if (!trackSameName || root!==this.snap?.root || current.name!==this.snap?.head_branch) return;
     }
-    await this.run("Pull", ()=>api.pull(current.name,trackSameName));
+    await this.runMerge("Pull", async()=>{
+      let result=await api.pull(current.name,trackSameName);
+      if(result.plan) {
+        const plan=result.plan;
+        const detail=m`${plan.ahead} lokale Commits und ${plan.behind} Remote-Commits. Ein Merge führt beide Stände zusammen und erhält deine lokalen Commits. Danach kannst du pushen.`;
+        if(!await confirmDialog(t("Branch-Stände sind auseinander gelaufen"),current.name+" ← "+plan.upstream.replace(/^refs\/(remotes|heads)\//,"")+"\n\n"+detail,t("Remote-Änderungen mergen")))return null;
+        if(root!==this.snap?.root)return null;
+        result=await api.pull(current.name,false,plan);
+      }
+      return {ok:result.ok,completed:result.ok,conflicts:result.conflicts??[],stdout:result.stdout,stderr:result.stderr};
+    });
   }
 
   async push() {
@@ -1260,7 +1279,14 @@ class App implements PanelCtx {
       toast(t("Noch nicht gepusht: Schließe zuerst den Merge unter Änderungen ab. Dabei entsteht der Merge-Commit."), "err");
       return;
     }
-    await this.run("Push", () => api.push(!this.branchesList.find(b => b.is_current)?.upstream));
+    let needsPull=false;
+    await this.run("Push", async()=>{
+      const result=await api.push(!this.branchesList.find(b=>b.is_current)?.upstream);
+      needsPull=!result.ok&&/non-fast-forward|\(fetch first\)/i.test(result.stderr+result.stdout);
+      if(needsPull){this.log(result.stderr+"\n"+result.stdout);return {...result,stdout:"",stderr:t("Push abgelehnt: Auf dem Remote liegen neuere Commits. Starte Pull, um die Stände zusammenzuführen.")};}
+      return result;
+    });
+    if(needsPull&&await confirmDialog(t("Remote-Branch ist weiter"),t("Deine lokalen Commits bleiben erhalten. Hole zuerst die Remote-Änderungen. Danach kannst du erneut pushen."),t("Pull starten")))await this.pull();
   }
 
   async revertCommit(commit:CommitInfo) {
@@ -1307,7 +1333,7 @@ class App implements PanelCtx {
     });
   }
 
-  async runMerge(label: string, fn: () => Promise<MergeOutcome>) {
+  async runMerge(label: string, fn: () => Promise<MergeOutcome|null>) {
     if (this.busy) return;
     this.mergeError="";
     this.busy = true;
@@ -1315,6 +1341,7 @@ class App implements PanelCtx {
     this.root.setAttribute("aria-busy", "true");
     try {
       const r = await fn();
+      if(!r){await this.refresh(true);return;}
       this.log(`$ ${label}\n${r.stdout}${r.stderr ? "\n" + r.stderr : ""}`);
       if (r.ok) {
         this.lastStatus = m`${label}: abgeschlossen`;
@@ -1340,6 +1367,7 @@ class App implements PanelCtx {
     } finally {
       this.busy = false;
       this.root.setAttribute("aria-busy", "false");
+      this.root.querySelector(".shell")?.classList.remove("busy");
     }
     await this.refresh(true);
   }

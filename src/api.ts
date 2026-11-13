@@ -218,6 +218,11 @@ export interface MergeOutcome {
 
 // --------------------------------------------------------------- Befehle
 
+export interface PullPlan {branch:string;upstream:string;upstream_oid:string;head:string;ahead:number;behind:number;token:string;}
+export interface PullResult extends CommandResult {plan?:PullPlan|null;conflicts?:string[];}
+
+export interface WorktreeBranchDeletion {branch:string;path:string;branch_oid:string;caller_head:string;token:string;blocked:string|null;}
+
 export interface MergePreview {
   source: string; target: string; source_oid: string; tree_oid: string; target_oid: string; token: string;
   kind: "up_to_date" | "fast_forward" | "clean" | "conflicts";
@@ -300,6 +305,8 @@ export const api = {
     call<CommandResult>("create_branch", { name, start, checkout }),
   deleteBranch: (name: string, force = false, remote = false, expected?: string, expectedHead?: string) =>
     call<CommandResult>("delete_branch", { name, force, remote, expected, expected_head: expectedHead }),
+  worktreeBranchPreview: (name:string)=>call<WorktreeBranchDeletion|null>("worktree_branch_preview",{name}),
+  removeWorktreeBranch: (preview:WorktreeBranchDeletion,force:boolean)=>call<CommandResult>("remove_worktree_branch",{preview,force}),
   renameBranch: (name: string, newName: string) =>
     call<CommandResult>("rename_branch", { name, new_name: newName }),
   mergeBranch: (name: string, noFf = true, squash = false, message: string | null = null) =>
@@ -319,7 +326,7 @@ export const api = {
 
   fetchRemote: (remote: string | null = null) =>
     call<CommandResult>("fetch_remote", { remote }),
-  pull: (expectedBranch: string, trackSameName = false) => call<CommandResult>("pull", { expected_branch: expectedBranch, track_same_name: trackSameName }),
+  pull: (expectedBranch: string, trackSameName = false, confirmed:PullPlan|null=null) => call<PullResult>("pull", { expected_branch: expectedBranch, track_same_name: trackSameName, confirmed }),
   push: (setUpstream = false) => call<CommandResult>("push", { set_upstream: setUpstream }),
 
   stashes: () => call<StashInfo[]>("stashes"),
