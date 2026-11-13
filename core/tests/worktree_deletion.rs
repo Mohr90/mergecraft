@@ -198,3 +198,31 @@ fn merged_into_current_branch_is_removable_even_if_upstream_is_behind() {
     assert!(!r.exists());
     assert!(!r.linked.exists());
 }
+
+#[test]
+fn explicit_discard_removes_dirty_files_but_never_bypasses_structural_guards() {
+    for kind in ["modified", "staged", "untracked", "ignored"] {
+        let r = Repo::new();
+        let file = match kind { "untracked" => "new", "ignored" => "ignored", _ => "file" };
+        std::fs::write(r.other().path(file), "discard me\n").unwrap();
+        if kind == "staged" { r.other().run(["add", "file"]).unwrap(); }
+        let preview = r.git.worktree_branch_preview("cleanup").unwrap().unwrap();
+        assert!(preview.discardable);
+        assert!(r.git.remove_worktree_branch(&preview, true).is_err());
+        assert!(r.git.remove_worktree_branch_discard(&preview, true, true).unwrap().ok);
+        assert!(!r.linked.exists()); assert!(!r.exists());
+    }
+    let r = Repo::new();
+    std::fs::write(r.other().path("ignored"), "first").unwrap();
+    let preview = r.git.worktree_branch_preview("cleanup").unwrap().unwrap();
+    std::fs::write(r.other().path("ignored"), "other").unwrap();
+    assert!(r.git.remove_worktree_branch_discard(&preview,true,true).is_err());
+    r.git.run(["worktree", "lock", r.linked.to_str().unwrap()]).unwrap();
+    let locked = r.git.worktree_branch_preview("cleanup").unwrap().unwrap();
+    assert!(!locked.discardable);
+    assert!(r.git.remove_worktree_branch_discard(&locked,true,true).is_err());
+    assert!(r.linked.exists()); assert!(r.exists());
+    let main = r.git.worktree_branch_preview("main").unwrap().unwrap();
+    assert!(!main.discardable);
+    assert!(r.git.remove_worktree_branch_discard(&main,true,true).is_err());
+}

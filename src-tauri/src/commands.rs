@@ -1212,7 +1212,7 @@ pub async fn worktree_branch_preview(state: State<'_,AppState>,name:String) -> R
     tauri::async_runtime::spawn_blocking(move||git.worktree_branch_preview(&name)).await.map_err(|e|e.to_string())?
 }
 #[tauri::command(rename_all = "snake_case")]
-pub async fn remove_worktree_branch(state: State<'_,AppState>,preview:WorktreeBranchDeletion,force:bool) -> Result<CommandResult,String> {
+pub async fn remove_worktree_branch(state: State<'_,AppState>,preview:WorktreeBranchDeletion,force:bool,discard_changes:Option<bool>) -> Result<CommandResult,String> {
     let git=git_of(&state)?;
-    tauri::async_runtime::spawn_blocking(move||git.remove_worktree_branch(&preview,force)).await.map_err(|e|e.to_string())?
+    tauri::async_runtime::spawn_blocking(move||git.remove_worktree_branch_discard(&preview,force,discard_changes.unwrap_or(false))).await.map_err(|e|e.to_string())?
 }

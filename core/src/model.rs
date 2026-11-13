@@ -228,6 +228,8 @@ pub struct RevertPreview {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WorktreeBranchDeletion {
+    #[serde(default)]
+    pub discardable: bool,
     pub branch: String,
     pub path: String,
     pub branch_oid: String,

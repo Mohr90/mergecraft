@@ -67,7 +67,7 @@ const bridge=require('./mock-bridge.cjs');
   await capture('mergecraft-auto-resolve');
   await page.locator('dialog [data-i="1"]').click();
   await page.waitForFunction(()=>window.mergecraft.mergeEditor.resultText().includes('SHIPPING_FEE: u32 = 0;')&&window.mergecraft.mergeEditor.resultText().includes('MAX_ITEMS: u32 = 20;'));
-  await page.locator('.region[data-region="3"] .auto-suggestion summary').click();
+  await page.locator('.region[data-region="3"] .auto-suggestion > summary').click();
   await capture('mergecraft-review-proposal');
   await page.locator('.region[data-region="3"] [data-act="auto-region"]').click();
   await page.locator('.region[data-region="5"] [data-act="take-ours"]').click();
