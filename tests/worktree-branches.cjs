@@ -7,7 +7,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
  await page.addInitScript(()=>{
   const invoke=window.__TAURI_INTERNALS__.invoke;
   window.__TAURI_INTERNALS__.invoke=async(cmd,args={})=>{
-   if(cmd==='worktree_branch_preview'){window.testCalls.push({cmd,args});return {branch:args.name,path:'/home/demo/projects/task-worktree',branch_oid:'a'.repeat(40),caller_head:'b'.repeat(40),token:'test',blocked:window.blockWorktree?'Der Worktree enthält lokale Änderungen, unversionierte oder ignorierte Dateien. Räume ihn zuerst auf; es wurde nichts entfernt.':null};}
+   if(cmd==='worktree_branch_preview'){window.testCalls.push({cmd,args});return {branch:args.name,path:'/home/demo/projects/task-worktree',branch_oid:'a'.repeat(40),caller_head:'b'.repeat(40),token:'test',discardable:!!window.discardWorktree,blocked:window.blockWorktree?'Der Worktree enthält lokale Änderungen, unversionierte oder ignorierte Dateien. Räume ihn zuerst auf; es wurde nichts entfernt.':null};}
    return invoke(cmd,args);
   };
  });
@@ -29,9 +29,20 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   assert.equal(await page.getByRole('button',{name:'Worktree und Branch entfernen',exact:true}).count(),0);
   assert((await page.locator('dialog').innerText()).includes('ignorierte Dateien'));
   await page.getByRole('button',{name:'Schließen',exact:true}).click();
+  await page.evaluate(()=>window.discardWorktree=true);await trash().click();
+  await page.getByRole('heading',{name:'Änderungen verwerfen und löschen?',exact:true}).waitFor();
+  assert((await page.locator('dialog').innerText()).includes('dauerhaft gelöscht'));
+  if(process.env.MERGECRAFT_SCREENSHOT_DIR)await page.screenshot({path:process.env.MERGECRAFT_SCREENSHOT_DIR+'/mergecraft-force-worktree-deletion.png'});
+  await page.getByRole('button',{name:'Abbrechen',exact:true}).click();
+  assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.cmd==='remove_worktree_branch').length),1);
+  await trash().click();await page.getByRole('button',{name:'Änderungen verwerfen und löschen',exact:true}).click();
+  await page.waitForFunction(()=>window.testCalls.filter(c=>c.cmd==='remove_worktree_branch').length===2);
+  assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.cmd==='remove_worktree_branch')[1].args.discard_changes),true);
+  await page.waitForFunction(()=>!window.mergecraft.busy);
+  await page.evaluate(()=>window.discardWorktree=false);
   await page.getByRole('button',{name:'English',exact:true}).click();await page.evaluate(()=>window.blockWorktree=false);await trash().click();
   await page.getByRole('heading',{name:'Remove worktree and branch?',exact:true}).waitFor();await page.keyboard.press('Escape');
-  assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.cmd==='remove_worktree_branch').length),1);
+  assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.cmd==='remove_worktree_branch').length),2);
   console.log('PASS explicit worktree path/removal confirmation, cancel, ignored-file blocker and DE/EN labels');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

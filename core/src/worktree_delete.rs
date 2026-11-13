@@ -34,6 +34,7 @@ impl Git {
             .find_map(|f| f.strip_prefix("HEAD "))
             .ok_or("Worktree-Stand fehlt.")?;
         let mut blocked = None;
+        let mut discardable = false;
         if matching.len() != 1 {
             blocked = Some(
                 "Der Branch ist in mehreren Worktrees geöffnet. Schließe sie zuerst einzeln."
@@ -70,19 +71,57 @@ impl Git {
                 ])?;
                 if !status.is_empty() {
                     blocked=Some("Der Worktree enthält lokale Änderungen, unversionierte oder ignorierte Dateien. Räume ihn zuerst auf; es wurde nichts entfernt.".into());
+                    discardable = true;
                 }
-                if blocked.is_none()
-                    && other
-                        .run(["ls-files", "--stage", "-z"])?
-                        .split('\0')
-                        .any(|entry| entry.starts_with("160000 "))
+                if other
+                    .run(["ls-files", "--stage", "-z"])?
+                    .split('\0')
+                    .any(|entry| entry.starts_with("160000 "))
                 {
+                    discardable = false;
                     blocked=Some("Der Worktree enthält Submodule. Entferne diese Verknüpfung außerhalb von Mergecraft.".into());
                 }
                 token = other.workflow_token()?;
+                // Include ignored file contents as well: these are discarded only by
+                // the separate explicit destructive confirmation.
+                use std::hash::{Hash, Hasher};
+                use std::io::Read;
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                token.hash(&mut h);
+                for file in other
+                    .run([
+                        "ls-files",
+                        "--others",
+                        "--ignored",
+                        "--exclude-standard",
+                        "-z",
+                    ])?
+                    .split('\0')
+                    .filter(|p| !p.is_empty())
+                {
+                    file.hash(&mut h);
+                    let path = other.path(file);
+                    if path.is_symlink() {
+                        std::fs::read_link(path)
+                            .map_err(|e| e.to_string())?
+                            .hash(&mut h);
+                    } else {
+                        let mut f = std::fs::File::open(path).map_err(|e| e.to_string())?;
+                        let mut buf = [0; 65536];
+                        loop {
+                            let n = f.read(&mut buf).map_err(|e| e.to_string())?;
+                            if n == 0 {
+                                break;
+                            }
+                            h.write(&buf[..n]);
+                        }
+                    }
+                }
+                token = format!("{:016x}", h.finish());
             }
         }
         Ok(Some(WorktreeBranchDeletion {
+            discardable,
             branch: branch.full_name,
             path: path.into(),
             branch_oid: oid.into(),
@@ -97,11 +136,22 @@ impl Git {
         preview: &WorktreeBranchDeletion,
         force: bool,
     ) -> Result<CommandResult, String> {
+        self.remove_worktree_branch_discard(preview, force, false)
+    }
+
+    pub fn remove_worktree_branch_discard(
+        &self,
+        preview: &WorktreeBranchDeletion,
+        force: bool,
+        discard_changes: bool,
+    ) -> Result<CommandResult, String> {
         let current = self
             .worktree_branch_preview(&preview.branch)?
             .ok_or("Die Worktree-Zuordnung wurde geändert. Bitte erneut prüfen.")?;
-        if let Some(reason) = current.blocked {
-            return Err(reason);
+        if let Some(reason) = &current.blocked {
+            if !(discard_changes && current.discardable) {
+                return Err(reason.clone());
+            }
         }
         if &current != preview {
             return Err(
@@ -125,8 +175,13 @@ impl Git {
                 );
             }
         }
-        // No --force: Git must recheck its own locks, worktree and submodule guards.
-        let removal = self.run_result(["worktree", "remove", "--", &preview.path]);
+        // A single --force permits dirty files; never bypass locked worktrees
+        // with the double-force option. Structural guards were rechecked above.
+        let removal = if discard_changes && current.discardable {
+            self.run_result(["worktree", "remove", "--force", "--", &preview.path])
+        } else {
+            self.run_result(["worktree", "remove", "--", &preview.path])
+        };
         if !removal.ok {
             return Ok(removal);
         }

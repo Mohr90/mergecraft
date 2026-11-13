@@ -221,7 +221,7 @@ export interface MergeOutcome {
 export interface PullPlan {branch:string;upstream:string;upstream_oid:string;head:string;ahead:number;behind:number;token:string;}
 export interface PullResult extends CommandResult {plan?:PullPlan|null;conflicts?:string[];}
 
-export interface WorktreeBranchDeletion {branch:string;path:string;branch_oid:string;caller_head:string;token:string;blocked:string|null;}
+export interface WorktreeBranchDeletion {discardable:boolean;branch:string;path:string;branch_oid:string;caller_head:string;token:string;blocked:string|null;}
 
 export interface MergePreview {
   source: string; target: string; source_oid: string; tree_oid: string; target_oid: string; token: string;
@@ -306,7 +306,7 @@ export const api = {
   deleteBranch: (name: string, force = false, remote = false, expected?: string, expectedHead?: string) =>
     call<CommandResult>("delete_branch", { name, force, remote, expected, expected_head: expectedHead }),
   worktreeBranchPreview: (name:string)=>call<WorktreeBranchDeletion|null>("worktree_branch_preview",{name}),
-  removeWorktreeBranch: (preview:WorktreeBranchDeletion,force:boolean)=>call<CommandResult>("remove_worktree_branch",{preview,force}),
+  removeWorktreeBranch: (preview:WorktreeBranchDeletion,force:boolean,discard_changes=false)=>call<CommandResult>("remove_worktree_branch",{preview,force,discard_changes}),
   renameBranch: (name: string, newName: string) =>
     call<CommandResult>("rename_branch", { name, new_name: newName }),
   mergeBranch: (name: string, noFf = true, squash = false, message: string | null = null) =>

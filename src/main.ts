@@ -1142,12 +1142,14 @@ class App implements PanelCtx {
       }
       const worktree=b.is_remote?null:await api.worktreeBranchPreview(b.full_name);
       if(worktree) {
-        if(worktree.blocked){await modal(t("Branch ist in einem Worktree geöffnet"),b.name+"\n"+worktree.path+"\n\n"+localizeText(worktree.blocked),[{label:t("Schließen"),value:false}]);return;}
+        if(worktree.blocked&&!worktree.discardable){await modal(t("Branch ist in einem Worktree geöffnet"),b.name+"\n"+worktree.path+"\n\n"+localizeText(worktree.blocked),[{label:t("Schließen"),value:false}]);return;}
         const explanation=t("Entfernt das Worktree-Verzeichnis und danach den lokalen Branch. Der Remote-Branch bleibt erhalten.");
         const own=force?t("Dieser Branch enthält Commits, die nicht im aktuellen Branch enthalten sind. Beim Löschen können diese Commits unerreichbar werden. Vergleiche die Branches, wenn du sie noch benötigst."):"";
-        if(!await modal(t("Worktree und Branch entfernen?"),b.name+"\n"+worktree.path+"\n\n"+explanation+(own?"\n\n"+own:""),[{label:t("Abbrechen"),value:false},{label:t("Worktree und Branch entfernen"),value:true,danger:true}]))return;
+        const discard=worktree.discardable;
+        const warning=discard?explanation+"\n\n"+t("Alle lokalen Änderungen sowie unversionierte und ignorierte Dateien in diesem Worktree werden dauerhaft gelöscht. Es wird keine Sicherung angelegt."):explanation;
+        if(!await modal(t(discard?"Änderungen verwerfen und löschen?":"Worktree und Branch entfernen?"),b.name+"\n"+worktree.path+"\n\n"+warning+(own?"\n\n"+own:""),[{label:t("Abbrechen"),value:false},{label:t(discard?"Änderungen verwerfen und löschen":"Worktree und Branch entfernen"),value:true,danger:true}]))return;
         if(root!==this.snap?.root||this.busy)return;
-        await this.run(t("Worktree und Branch entfernen"),()=>api.removeWorktreeBranch(worktree,force));return;
+        await this.run(t("Worktree und Branch entfernen"),()=>api.removeWorktreeBranch(worktree,force,discard));return;
       }
       const title = b.is_remote ? m`Remote-Branch „${b.name}“ löschen?` : m`Lokalen Branch „${b.name}“ löschen?`;
       const detail = b.is_remote ? t("Entfernt den Branch auf dem Remote per push --delete.")

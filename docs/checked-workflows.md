@@ -24,7 +24,7 @@ This first version handles one ordinary commit at a time. Merge commits require 
 
 Use the branch's Delete action. If it is checked out in one linked worktree, Mergecraft offers **Remove worktree and branch**, showing the full directory path and any warning about commits unique to that branch. Confirming removes the directory through Git, then deletes the local branch. Remote branches are preserved.
 
-Main/current, locked, missing, busy, submodule and multiple-worktree cases are protected. Tracked modifications, untracked files and even ignored files block deletion; Mergecraft never forces worktree removal. If the repository changes after confirmation, reopen the action. If Git removes the worktree but subsequently refuses branch deletion, the error explicitly says that the branch remains. Bulk cleanup continues to protect checked-out branches.
+Main/current, locked, missing, busy, submodule and multiple-worktree cases are protected. Tracked modifications, untracked files and ignored files block ordinary deletion. Since v1.4.2, Mergecraft offers a separate **Discard changes and delete** confirmation for this case: it permanently removes the full linked-worktree directory and its local branch, including these files, without a backup. It never bypasses structural protections or removes the remote branch. Changes after opening the confirmation require a fresh preview. If the repository changes after confirmation, reopen the action. If Git removes the worktree but subsequently refuses branch deletion, the error explicitly says that the branch remains. Bulk cleanup continues to protect checked-out branches.
 
 ![Explicit worktree and branch removal confirmation (synthetic demo)](screenshots/mergecraft-worktree-deletion.png)
 
