@@ -686,6 +686,15 @@ export const en = {
   "Die Worktree-Zuordnung oder der Branch-Stand wurde geändert. Bitte erneut prüfen.": "The worktree assignment or branch state changed. Check again.",
   "Der Branch enthält eigene Commits. Bestätige das Löschen ausdrücklich.": "The branch contains its own commits. Explicitly confirm deletion.",
   "Worktree entfernt; der Branch wurde nicht gelöscht. Prüfe den Branch und versuche es erneut.": "Worktree removed; the branch was not deleted. Check the branch and try again.",
-  "Der Worktree enthält Submodule. Entferne diese Verknüpfung außerhalb von Mergecraft.": "The worktree contains submodules. Remove this worktree outside Mergecraft."
+  "Der Worktree enthält Submodule. Entferne diese Verknüpfung außerhalb von Mergecraft.": "The worktree contains submodules. Remove this worktree outside Mergecraft.",
+  "Branch-Stände sind auseinander gelaufen": "Local and remote history have diverged",
+  "{{0}} lokale Commits und {{1}} Remote-Commits. Ein Merge führt beide Stände zusammen und erhält deine lokalen Commits. Danach kannst du pushen.": "{{0}} local commits and {{1}} remote commits. A merge combines both histories and preserves your local commits. You can push afterwards.",
+  "Remote-Änderungen mergen": "Merge remote changes",
+  "Push abgelehnt: Auf dem Remote liegen neuere Commits. Starte Pull, um die Stände zusammenzuführen.": "Push rejected: the remote has newer commits. Start Pull to combine the histories.",
+  "Remote-Branch ist weiter": "The remote branch has newer commits",
+  "Deine lokalen Commits bleiben erhalten. Hole zuerst die Remote-Änderungen. Danach kannst du erneut pushen.": "Your local commits are preserved. Pull the remote changes first, then push again.",
+  "Pull starten": "Start Pull",
+  "Der Pull-Stand wurde geändert. Bitte Pull erneut starten.": "The pull state changed. Start Pull again.",
+  "Kein Branch ausgecheckt.": "No branch is checked out."
 } as const;
 export type MessageKey = keyof typeof en;

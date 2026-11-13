@@ -886,14 +886,11 @@ pub async fn pull(
     state: State<'_, AppState>,
     expected_branch: Option<String>,
     track_same_name: Option<bool>,
-) -> Result<CommandResult, String> {
+    confirmed: Option<PullPlan>,
+) -> Result<PullResult, String> {
     let g = git_of(&state)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        g.prepare_pull(expected_branch.as_deref(), track_same_name.unwrap_or(false))?;
-        Ok(utf8(g.raw(["pull", "--no-edit"])))
-    })
-    .await
-    .map_err(|e| format!("Git-Auftrag fehlgeschlagen: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || g.pull_checked(expected_branch.as_deref(),track_same_name.unwrap_or(false),confirmed.as_ref()))
+        .await.map_err(|e| format!("Git-Auftrag fehlgeschlagen: {e}"))?
 }
 
 #[tauri::command(rename_all = "snake_case")]

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fetch before Pull and offer an explicit history-preserving merge for divergent branches, without changing Git pull configuration. Route conflicts to the merge editor and rejected non-fast-forward pushes to an explicit Pull action.
+
 - Offer explicit linked-worktree and local-branch removal from the branch delete action, with a full-path confirmation and checks for local/ignored files, locks, current/main worktrees and stale state.
 
 ## 1.4.0 — 2026-11-10

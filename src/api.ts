@@ -218,6 +218,9 @@ export interface MergeOutcome {
 
 // --------------------------------------------------------------- Befehle
 
+export interface PullPlan {branch:string;upstream:string;upstream_oid:string;head:string;ahead:number;behind:number;token:string;}
+export interface PullResult extends CommandResult {plan?:PullPlan|null;conflicts?:string[];}
+
 export interface WorktreeBranchDeletion {branch:string;path:string;branch_oid:string;caller_head:string;token:string;blocked:string|null;}
 
 export interface MergePreview {
@@ -323,7 +326,7 @@ export const api = {
 
   fetchRemote: (remote: string | null = null) =>
     call<CommandResult>("fetch_remote", { remote }),
-  pull: (expectedBranch: string, trackSameName = false) => call<CommandResult>("pull", { expected_branch: expectedBranch, track_same_name: trackSameName }),
+  pull: (expectedBranch: string, trackSameName = false, confirmed:PullPlan|null=null) => call<PullResult>("pull", { expected_branch: expectedBranch, track_same_name: trackSameName, confirmed }),
   push: (setUpstream = false) => call<CommandResult>("push", { set_upstream: setUpstream }),
 
   stashes: () => call<StashInfo[]>("stashes"),

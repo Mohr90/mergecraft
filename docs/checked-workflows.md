@@ -27,3 +27,11 @@ Use the branch's Delete action. If it is checked out in one linked worktree, Mer
 Main/current, locked, missing, busy, submodule and multiple-worktree cases are protected. Tracked modifications, untracked files and even ignored files block deletion; Mergecraft never forces worktree removal. If the repository changes after confirmation, reopen the action. If Git removes the worktree but subsequently refuses branch deletion, the error explicitly says that the branch remains. Bulk cleanup continues to protect checked-out branches.
 
 ![Explicit worktree and branch removal confirmation (synthetic demo)](screenshots/mergecraft-worktree-deletion.png)
+
+## Divergent Pull and rejected Push (unreleased)
+
+Pull first fetches the tracking remote. If a fast-forward is possible, Git updates the branch while preserving unrelated local changes. If both branches contain unique commits, a dialog shows the counts and offers **Merge remote changes**. Cancel stops after Fetch. Confirmation rechecks the inspected branch, commit IDs and working state, then merges both histories. Git configuration is not changed, and no rebase, force push or automatic stash is used. Conflicts open in the existing merge editor; finish the merge before pushing.
+
+A non-fast-forward Push rejection offers **Start Pull**. It does not automatically retry Push.
+
+![Explicit reconciliation of local and remote commits (synthetic demo)](screenshots/mergecraft-divergent-pull.png)
