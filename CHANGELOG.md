@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.2 — 2026-11-13
 
 - Offer explicitly confirmed force removal of dirty linked worktrees, including untracked and ignored files; retain current/main, lock, operation and submodule protection.
 
