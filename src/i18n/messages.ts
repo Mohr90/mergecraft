@@ -671,6 +671,21 @@ export const en = {
   "Die markierten Dateien brauchen nach dem Start deine Entscheidung.": "The marked files will need your decision after starting the merge.",
   "Eine externe Revert-Serie läuft. Setze sie mit git revert --continue fort oder brich sie hier ab.": "An external revert sequence is in progress. Continue it with git revert --continue, or abort it here.",
   "Erreichbarkeit wird geprüft …": "Checking commit reachability …",
-  "Bitte aktualisieren und erneut prüfen.": "Please refresh and check again."
+  "Bitte aktualisieren und erneut prüfen.": "Please refresh and check again.",
+  "Branch ist in einem Worktree geöffnet": "Branch is checked out in a worktree",
+  "Entfernt das Worktree-Verzeichnis und danach den lokalen Branch. Der Remote-Branch bleibt erhalten.": "Removes the worktree directory, then the local branch. The remote branch is preserved.",
+  "Worktree und Branch entfernen?": "Remove worktree and branch?",
+  "Worktree und Branch entfernen": "Remove worktree and branch",
+  "Branch nicht gefunden.": "Branch not found.",
+  "Der Branch ist in mehreren Worktrees geöffnet. Schließe sie zuerst einzeln.": "The branch is checked out in multiple worktrees. Close them individually first.",
+  "Der Haupt-Worktree und der aktuell geöffnete Worktree können hier nicht entfernt werden.": "The main worktree and the currently open worktree cannot be removed here.",
+  "Der Worktree ist gesperrt oder nicht erreichbar. Prüfe ihn zuerst.": "The worktree is locked or unavailable. Check it first.",
+  "Im Worktree läuft noch ein Git-Vorgang. Schließe ihn zuerst ab.": "A Git operation is in progress in the worktree. Finish it first.",
+  "Der Worktree enthält lokale Änderungen, unversionierte oder ignorierte Dateien. Räume ihn zuerst auf; es wurde nichts entfernt.": "The worktree contains local changes, untracked or ignored files. Clean it up first; nothing was removed.",
+  "Die Worktree-Zuordnung wurde geändert. Bitte erneut prüfen.": "The worktree assignment changed. Check again.",
+  "Die Worktree-Zuordnung oder der Branch-Stand wurde geändert. Bitte erneut prüfen.": "The worktree assignment or branch state changed. Check again.",
+  "Der Branch enthält eigene Commits. Bestätige das Löschen ausdrücklich.": "The branch contains its own commits. Explicitly confirm deletion.",
+  "Worktree entfernt; der Branch wurde nicht gelöscht. Prüfe den Branch und versuche es erneut.": "Worktree removed; the branch was not deleted. Check the branch and try again.",
+  "Der Worktree enthält Submodule. Entferne diese Verknüpfung außerhalb von Mergecraft.": "The worktree contains submodules. Remove this worktree outside Mergecraft."
 } as const;
 export type MessageKey = keyof typeof en;

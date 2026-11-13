@@ -337,6 +337,7 @@ export async function mockInvoke(cmd: string, args?: any): Promise<any> {
       return null;
     case "pick_folder":
       return "/home/demo/projects";
+    case "worktree_branch_preview": return null;
     case "merge_preview":
       return {source:args.name,target:"feature/refactor",source_oid:"b".repeat(40),target_oid:"a".repeat(40),tree_oid:"c".repeat(40),token:"demo",kind:"conflicts",incoming:3,files:[{status:"M",path:"src/main.rs"}],conflicts:["src/main.rs"]};
     case "hunk_set": {

@@ -11,3 +11,5 @@ pub mod verify;
 mod working;
 
 mod workflows;
+
+mod worktree_delete;

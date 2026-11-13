@@ -1208,3 +1208,14 @@ pub async fn revert_control(state: State<'_, AppState>, abort: bool, expected: S
     let g = git_of(&state)?;
     tauri::async_runtime::spawn_blocking(move || g.revert_control(abort, &expected)).await.map_err(|e|e.to_string())?
 }
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn worktree_branch_preview(state: State<'_,AppState>,name:String) -> Result<Option<WorktreeBranchDeletion>,String> {
+    let git=git_of(&state)?;
+    tauri::async_runtime::spawn_blocking(move||git.worktree_branch_preview(&name)).await.map_err(|e|e.to_string())?
+}
+#[tauri::command(rename_all = "snake_case")]
+pub async fn remove_worktree_branch(state: State<'_,AppState>,preview:WorktreeBranchDeletion,force:bool) -> Result<CommandResult,String> {
+    let git=git_of(&state)?;
+    tauri::async_runtime::spawn_blocking(move||git.remove_worktree_branch(&preview,force)).await.map_err(|e|e.to_string())?
+}

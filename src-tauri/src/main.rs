@@ -93,6 +93,8 @@ fn main() {
             commands::checkout_branch,
             commands::create_branch,
             commands::delete_branch,
+            commands::worktree_branch_preview,
+            commands::remove_worktree_branch,
             commands::rename_branch,
             commands::merge_branch,
             commands::merge_preview,
